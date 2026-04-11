@@ -1,20 +1,24 @@
-// プロジェクトの型定義
-
-/** プロジェクトカード */
 export type Project = {
-  id: string
+  slug: string
   title: string
   description: string
-  longDescription: string
   thumbnail: string
-  techTags: string[]
-  category: "Web App" | "Mobile" | "OSS" | "Other"
-  githubUrl?: string
-  demoUrl?: string
-  featured: boolean
+  tags: string[]
+  challenge: string
+  solution: string
+  outcome: string
+  links: { demo?: string; github?: string }
+  screenshots: string[]
+  year: number
 }
 
-/** 経歴タイムラインエントリ */
+export type Skill = {
+  name: string
+  category: 'Frontend' | 'Backend' | 'Infrastructure' | 'Tools'
+  proficiency: string
+  size: 'small' | 'medium' | 'large'
+}
+
 export type Experience = {
   id: string
   company: string
@@ -24,27 +28,13 @@ export type Experience = {
   tags: string[]
 }
 
-/** スキルカード */
-export type Skill = {
+export type Profile = {
   name: string
-  icon: string
-  category: "Frontend" | "Backend" | "Tools" | "Other"
-  proficiency: "Beginner" | "Intermediate" | "Advanced" | "Expert"
-  size: "small" | "medium" | "large"
-}
-
-/** ブログ記事のフロントマター */
-export type BlogPost = {
-  slug: string
+  nameEn: string
   title: string
-  date: string
-  description: string
-  tags: string[]
-  readingTime: string
+  introduction: string[]
+  email: string
+  social: { label: string; href: string }[]
 }
 
-/** ナビゲーションアイテム */
-export type NavItem = {
-  label: string
-  href: string
-}
+export type NavItem = { label: string; href: string }

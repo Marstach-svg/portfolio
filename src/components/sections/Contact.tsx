@@ -1,189 +1,78 @@
-"use client"
+'use client'
 
-import { useState } from "react"
-import { motion } from "framer-motion"
-import { Mail, Copy, Check, Code2, BookOpen, Link2 } from "lucide-react"
-import { X as XIcon } from "lucide-react"
-import { SectionWrapper } from "@/components/ui/SectionWrapper"
-import { Button } from "@/components/ui/Button"
+import { useState } from 'react'
+import TextReveal from '@/components/ui/TextReveal'
+import { profile } from '@/data/profile'
 
-// SNSリンク
-const socialLinks = [
-  { icon: Code2, label: "GitHub", href: "https://github.com" },
-  { icon: XIcon, label: "X / Twitter", href: "https://x.com" },
-  { icon: Link2, label: "LinkedIn", href: "https://linkedin.com" },
-  { icon: BookOpen, label: "Zenn", href: "https://zenn.dev" },
-]
-
-const EMAIL = "your@email.com"
-
-export function Contact() {
+export default function Contact() {
   const [copied, setCopied] = useState(false)
-  const [formState, setFormState] = useState({
-    name: "",
-    email: "",
-    message: "",
-  })
-  const [submitted, setSubmitted] = useState(false)
 
-  // メールアドレスをクリップボードにコピー
   const copyEmail = async () => {
-    await navigator.clipboard.writeText(EMAIL)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
-
-  // フォーム送信（プレースホルダー）
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    // TODO: Resend or EmailJS で送信処理を実装
-    setSubmitted(true)
+    try {
+      await navigator.clipboard.writeText(profile.email)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      // fallback
+    }
   }
 
   return (
-    <SectionWrapper id="contact" title="Contact" subtitle="お問い合わせ">
-      <div className="grid gap-12 md:grid-cols-2">
-        {/* 左カラム: メールとSNS */}
-        <div className="space-y-8">
-          {/* メールアドレス */}
-          <div>
-            <p className="mb-3 text-sm text-text-muted">メールアドレス</p>
-            <div className="flex items-center gap-3">
-              <Mail className="h-5 w-5 text-accent-blue" />
-              <span className="text-lg font-medium text-text-primary">
-                {EMAIL}
-              </span>
-              <button
-                onClick={copyEmail}
-                className="rounded-lg border border-border p-2 text-text-muted transition-colors hover:bg-surface-elevated hover:text-text-primary"
-                aria-label="メールアドレスをコピー"
-              >
-                {copied ? (
-                  <Check className="h-4 w-4 text-green-400" />
-                ) : (
-                  <Copy className="h-4 w-4" />
-                )}
-              </button>
-            </div>
-            {copied && (
-              <motion.p
-                className="mt-2 text-sm text-green-400"
-                initial={{ opacity: 0, y: -5 }}
-                animate={{ opacity: 1, y: 0 }}
-              >
-                コピーしました！
-              </motion.p>
-            )}
-          </div>
+    <section id="contact" className="py-32 px-6 md:px-12 lg:px-24" aria-label="Contact">
+      <div className="max-w-4xl mx-auto text-center">
+        <TextReveal
+          tag="h2"
+          className="text-4xl md:text-6xl lg:text-7xl font-syne font-extrabold mb-8"
+          scrub={false}
+          stagger={0.03}
+          underwater
+        >
+          Let&apos;s work together
+        </TextReveal>
 
-          {/* SNSリンク */}
-          <div>
-            <p className="mb-4 text-sm text-text-muted">SNS</p>
-            <div className="flex gap-4">
-              {socialLinks.map((link) => (
-                <motion.a
-                  key={link.label}
-                  href={link.href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex h-12 w-12 items-center justify-center rounded-xl border border-border bg-surface text-text-muted transition-colors hover:border-border-hover hover:text-accent-blue"
-                  whileHover={{ scale: 1.1 }}
-                  whileTap={{ scale: 0.95 }}
-                  aria-label={link.label}
-                >
-                  <link.icon className="h-5 w-5" />
-                </motion.a>
-              ))}
-            </div>
-          </div>
+        <TextReveal
+          tag="p"
+          className="text-lg font-noto mb-16 max-w-lg mx-auto"
+          scrub
+          underwater
+        >
+          お気軽にご連絡ください。新しいプロジェクトやコラボレーションのお話をお待ちしています。
+        </TextReveal>
+
+        {/* Email */}
+        <div className="mb-12">
+          <button
+            onClick={copyEmail}
+            className="inline-block text-xl md:text-2xl font-space font-medium border-b-2 border-sky-200/50 text-sky-100 pb-1 hover:border-sky-300 hover:text-white transition-colors"
+            data-cursor="magnetic"
+          >
+            {copied ? 'Copied!' : profile.email}
+          </button>
         </div>
 
-        {/* 右カラム: コンタクトフォーム */}
-        <div>
-          {submitted ? (
-            <motion.div
-              className="flex h-full flex-col items-center justify-center rounded-2xl border border-border bg-surface p-8 text-center"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
+        {/* Social links */}
+        <div className="flex items-center justify-center gap-8">
+          {profile.social.map((link) => (
+            <a
+              key={link.label}
+              href={link.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm font-space uppercase tracking-wider text-sky-300/60 hover:text-sky-100 transition-colors"
+              data-cursor="magnetic"
             >
-              <Check className="mb-4 h-12 w-12 text-green-400" />
-              <h3 className="text-xl font-bold text-text-primary">
-                送信しました！
-              </h3>
-              <p className="mt-2 text-text-secondary">
-                お問い合わせありがとうございます。折り返しご連絡いたします。
-              </p>
-            </motion.div>
-          ) : (
-            <form
-              onSubmit={handleSubmit}
-              className="space-y-5 rounded-2xl border border-border bg-surface p-6"
-            >
-              <div>
-                <label
-                  htmlFor="name"
-                  className="mb-2 block text-sm font-medium text-text-secondary"
-                >
-                  お名前
-                </label>
-                <input
-                  id="name"
-                  type="text"
-                  required
-                  value={formState.name}
-                  onChange={(e) =>
-                    setFormState({ ...formState, name: e.target.value })
-                  }
-                  className="w-full rounded-xl border border-border bg-background px-4 py-3 text-text-primary placeholder:text-text-muted focus:border-accent-blue focus:outline-none focus:ring-1 focus:ring-accent-blue"
-                  placeholder="山田 太郎"
-                />
-              </div>
-              <div>
-                <label
-                  htmlFor="email"
-                  className="mb-2 block text-sm font-medium text-text-secondary"
-                >
-                  メールアドレス
-                </label>
-                <input
-                  id="email"
-                  type="email"
-                  required
-                  value={formState.email}
-                  onChange={(e) =>
-                    setFormState({ ...formState, email: e.target.value })
-                  }
-                  className="w-full rounded-xl border border-border bg-background px-4 py-3 text-text-primary placeholder:text-text-muted focus:border-accent-blue focus:outline-none focus:ring-1 focus:ring-accent-blue"
-                  placeholder="email@example.com"
-                />
-              </div>
-              <div>
-                <label
-                  htmlFor="message"
-                  className="mb-2 block text-sm font-medium text-text-secondary"
-                >
-                  メッセージ
-                </label>
-                <textarea
-                  id="message"
-                  required
-                  rows={5}
-                  value={formState.message}
-                  onChange={(e) =>
-                    setFormState({ ...formState, message: e.target.value })
-                  }
-                  className="w-full resize-none rounded-xl border border-border bg-background px-4 py-3 text-text-primary placeholder:text-text-muted focus:border-accent-blue focus:outline-none focus:ring-1 focus:ring-accent-blue"
-                  placeholder="お気軽にメッセージをお送りください"
-                />
-              </div>
-              <Button type="submit" className="w-full">
-                <Mail className="h-4 w-4" />
-                送信する
-              </Button>
-            </form>
-          )}
+              {link.label}
+            </a>
+          ))}
+        </div>
+
+        {/* Footer */}
+        <div className="mt-32 pt-8 border-t border-sky-300/15">
+          <p className="text-xs text-sky-300/40 font-space">
+            &copy; {new Date().getFullYear()} RYOKEN. All rights reserved.
+          </p>
         </div>
       </div>
-    </SectionWrapper>
+    </section>
   )
 }

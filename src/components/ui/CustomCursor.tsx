@@ -1,47 +1,85 @@
-"use client"
+'use client'
 
-import { useEffect, useState } from "react"
-import { motion, useMotionValue, useSpring } from "framer-motion"
+import { useEffect, useRef } from 'react'
+import gsap from 'gsap'
+import { useMediaQuery } from '@/hooks/useMediaQuery'
+import { useReducedMotion } from '@/hooks/useReducedMotion'
 
-/** カスタムカーソル（PCのみ表示） */
-export function CustomCursor() {
-  const [isVisible, setIsVisible] = useState(false)
-  const cursorX = useMotionValue(0)
-  const cursorY = useMotionValue(0)
-
-  // 外側の円はスプリングで追従
-  const springX = useSpring(cursorX, { stiffness: 300, damping: 28 })
-  const springY = useSpring(cursorY, { stiffness: 300, damping: 28 })
+export default function CustomCursor() {
+  const dotRef = useRef<HTMLDivElement>(null)
+  const ringRef = useRef<HTMLDivElement>(null)
+  const isDesktop = useMediaQuery('(min-width: 768px)')
+  const prefersReduced = useReducedMotion()
 
   useEffect(() => {
-    // タッチデバイスではカーソルを表示しない
-    const isTouchDevice = window.matchMedia("(pointer: coarse)").matches
-    if (isTouchDevice) return
+    if (!isDesktop || prefersReduced) return
 
-    setIsVisible(true)
+    const dot = dotRef.current!
+    const ring = ringRef.current!
+    if (!dot || !ring) return
 
-    const handleMouseMove = (e: MouseEvent) => {
-      cursorX.set(e.clientX)
-      cursorY.set(e.clientY)
+    const pos = { x: 0, y: 0 }
+    const mouse = { x: 0, y: 0 }
+
+    const onMove = (e: MouseEvent) => {
+      mouse.x = e.clientX
+      mouse.y = e.clientY
     }
+    window.addEventListener('mousemove', onMove)
 
-    window.addEventListener("mousemove", handleMouseMove)
-    return () => window.removeEventListener("mousemove", handleMouseMove)
-  }, [cursorX, cursorY])
+    const ticker = () => {
+      pos.x += (mouse.x - pos.x) * 0.15
+      pos.y += (mouse.y - pos.y) * 0.15
+      gsap.set(dot, { x: mouse.x, y: mouse.y })
+      gsap.set(ring, { x: pos.x, y: pos.y })
+    }
+    gsap.ticker.add(ticker)
 
-  if (!isVisible) return null
+    const targets = document.querySelectorAll('[data-cursor="hover"]')
+    targets.forEach((el) => {
+      el.addEventListener('mouseenter', () => {
+        gsap.to(ring, { scale: 2.5, borderColor: '#2563EB', duration: 0.3 })
+        gsap.to(dot, { scale: 0, duration: 0.2 })
+      })
+      el.addEventListener('mouseleave', () => {
+        gsap.to(ring, { scale: 1, borderColor: '#1C1917', duration: 0.3 })
+        gsap.to(dot, { scale: 1, duration: 0.2 })
+      })
+    })
+
+    const magnets = document.querySelectorAll('[data-cursor="magnetic"]')
+    magnets.forEach((el) => {
+      el.addEventListener('mousemove', (e: Event) => {
+        const me = e as MouseEvent
+        const rect = (el as HTMLElement).getBoundingClientRect()
+        const cx = rect.left + rect.width / 2
+        const cy = rect.top + rect.height / 2
+        const dx = (me.clientX - cx) * 0.3
+        const dy = (me.clientY - cy) * 0.3
+        gsap.to(el, { x: dx, y: dy, duration: 0.3 })
+      })
+      el.addEventListener('mouseleave', () => {
+        gsap.to(el, { x: 0, y: 0, duration: 0.5, ease: 'elastic.out(1, 0.3)' })
+      })
+    })
+
+    return () => {
+      window.removeEventListener('mousemove', onMove)
+      gsap.ticker.remove(ticker)
+    }
+  }, [isDesktop, prefersReduced])
+
+  if (!isDesktop || prefersReduced) return null
 
   return (
     <>
-      {/* 中心のドット */}
-      <motion.div
-        className="pointer-events-none fixed top-0 left-0 z-[100] h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent-blue mix-blend-difference"
-        style={{ x: cursorX, y: cursorY }}
+      <div
+        ref={dotRef}
+        className="pointer-events-none fixed left-0 top-0 z-[9999] h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-stone-900 mix-blend-difference"
       />
-      {/* 外側の円（遅延追従） */}
-      <motion.div
-        className="pointer-events-none fixed top-0 left-0 z-[100] h-8 w-8 -translate-x-1/2 -translate-y-1/2 rounded-full border border-accent-blue/50 mix-blend-difference"
-        style={{ x: springX, y: springY }}
+      <div
+        ref={ringRef}
+        className="pointer-events-none fixed left-0 top-0 z-[9998] h-10 w-10 -translate-x-1/2 -translate-y-1/2 rounded-full border border-stone-900 mix-blend-difference"
       />
     </>
   )

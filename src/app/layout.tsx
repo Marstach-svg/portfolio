@@ -1,68 +1,40 @@
-import type { Metadata } from "next"
-import { Geist, Geist_Mono } from "next/font/google"
-import { Noto_Sans_JP } from "next/font/google"
-import { Header } from "@/components/layout/Header"
-import { Footer } from "@/components/layout/Footer"
-import { CustomCursor } from "@/components/ui/CustomCursor"
-import "./globals.css"
+import type { Metadata } from 'next'
+import { Syne, Space_Grotesk, Inter, Noto_Sans_JP } from 'next/font/google'
+import SmoothScrollProvider from '@/components/providers/SmoothScrollProvider'
+import PageTransition from '@/components/providers/PageTransition'
+import CustomCursor from '@/components/ui/CustomCursor'
+import Nav from '@/components/ui/Nav'
+import './globals.css'
 
-// フォント設定
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-})
+const syne = Syne({ variable: '--font-syne-var', subsets: ['latin'], weight: ['400', '600', '700', '800'] })
+const space = Space_Grotesk({ variable: '--font-space-var', subsets: ['latin'], weight: ['300', '400', '500', '600', '700'] })
+const inter = Inter({ variable: '--font-inter-var', subsets: ['latin'], weight: ['400', '500'] })
+const notoSansJP = Noto_Sans_JP({ variable: '--font-noto-var', subsets: ['latin'], weight: ['400', '500', '700'] })
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-})
-
-const notoSansJP = Noto_Sans_JP({
-  variable: "--font-noto-sans-jp",
-  subsets: ["latin"],
-  weight: ["400", "500", "700"],
-})
-
-// メタデータ
 export const metadata: Metadata = {
-  title: {
-    template: "%s | Portfolio",
-    default: "Your Name | Portfolio",
-  },
-  description:
-    "フルスタックエンジニアのポートフォリオサイト。Web開発、モバイルアプリ、OSSプロジェクトを紹介しています。",
+  title: { template: '%s | RYOKEN', default: 'RYOKEN | Creative Developer' },
+  description: 'フロントエンドエンジニアのポートフォリオ。WebGL、アニメーション、インタラクティブデザインを駆使した作品を紹介。',
   openGraph: {
-    type: "website",
-    locale: "ja_JP",
-    siteName: "Portfolio",
+    title: 'RYOKEN | Creative Developer',
+    description: 'フロントエンドエンジニアのポートフォリオ',
+    images: ['/og.jpg'],
+    type: 'website',
+    locale: 'ja_JP',
   },
-  twitter: {
-    card: "summary_large_image",
-  },
-  robots: {
-    index: true,
-    follow: true,
-  },
+  twitter: { card: 'summary_large_image' },
 }
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode
-}>) {
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html
-      lang="ja"
-      className={`${geistSans.variable} ${geistMono.variable} ${notoSansJP.variable}`}
-    >
-      <body className="min-h-screen bg-background text-text-primary antialiased">
-        {/* グレインノイズオーバーレイ */}
-        <div className="grain-overlay" aria-hidden="true" />
-        {/* カスタムカーソル（PCのみ） */}
-        <CustomCursor />
-        <Header />
-        <main>{children}</main>
-        <Footer />
+    <html lang="ja" className={`${syne.variable} ${space.variable} ${inter.variable} ${notoSansJP.variable}`}>
+      <body className="min-h-screen">
+        <SmoothScrollProvider>
+          <CustomCursor />
+          <Nav />
+          <PageTransition>
+            <main>{children}</main>
+          </PageTransition>
+        </SmoothScrollProvider>
       </body>
     </html>
   )

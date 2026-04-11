@@ -1,0 +1,43 @@
+import type { Project } from '@/types'
+
+export const projects: Project[] = [
+  {
+    slug: 'ec-platform',
+    title: 'ECサイトプラットフォーム',
+    description: 'フルスタックECサイト。リアルタイム在庫管理と決済機能を実装。',
+    thumbnail: '/images/projects/placeholder.svg',
+    tags: ['Next.js', 'TypeScript', 'Stripe', 'PostgreSQL'],
+    challenge: '既存ECサイトのページ遷移が多く、購入完了までの離脱率が高い。',
+    solution: 'Next.js App RouterでSPAライクな購入フローを実装。SSR/SSGによるSEOとStripeでPCI DSS準拠の決済を実現。',
+    outcome: '購入完了率30%向上、Lighthouseスコア95点達成。',
+    links: { demo: 'https://example.com', github: 'https://github.com' },
+    screenshots: [],
+    year: 2024,
+  },
+  {
+    slug: 'task-management',
+    title: 'タスク管理アプリ',
+    description: 'チーム向けカンバンボード。ドラッグ&ドロップとリアルタイム同期。',
+    thumbnail: '/images/projects/placeholder.svg',
+    tags: ['React', 'Node.js', 'Socket.io', 'MongoDB'],
+    challenge: 'チーム内のタスク管理が属人化していた。',
+    solution: 'カンバンボード形式のUIとWebSocketリアルタイム同期を実装。React + dnd-kitでD&D、Socket.ioで安定したリアルタイム通信。',
+    outcome: 'チームで日常的に使用されるツールに。',
+    links: { github: 'https://github.com' },
+    screenshots: [],
+    year: 2023,
+  },
+  {
+    slug: 'portfolio-site',
+    title: 'ポートフォリオサイト',
+    description: 'WebGL・GSAPアニメーションを駆使したインタラクティブポートフォリオ。',
+    thumbnail: '/images/projects/placeholder.svg',
+    tags: ['Next.js', 'GSAP', 'OGL', 'Tailwind CSS'],
+    challenge: '採用担当者の印象に残るユニークなポートフォリオが必要だった。',
+    solution: '7つの先端グラフィック技術（WebGLシェーダー、パーティクル、カスタムカーソル等）を実装し、技術力を直接示すポートフォリオを構築。',
+    outcome: '唯一無二のインタラクティブポートフォリオを実現。',
+    links: { demo: 'https://example.com', github: 'https://github.com' },
+    screenshots: [],
+    year: 2026,
+  },
+]
