@@ -1,83 +1,102 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { Renderer, Camera, Geometry, Program, Mesh } from 'ogl'
+import { Renderer, Geometry, Program, Mesh } from 'ogl'
+import gsap from 'gsap'
+import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { useReducedMotion } from '@/hooks/useReducedMotion'
 
+gsap.registerPlugin(ScrollTrigger)
+
+// Screen-space NDC — no camera, positions directly in [-1, 1]
 const bubbleVertex = /* glsl */ `
-  attribute vec3 position;
+  attribute vec2 aBase;
   attribute float aSize;
   attribute float aSpeed;
   attribute float aOffset;
-  uniform mat4 modelViewMatrix;
-  uniform mat4 projectionMatrix;
+
   uniform float uTime;
-  uniform vec2 uMouse;
+  uniform vec2  uMouse;
+  uniform float uAspect;
+  uniform float uVisibility;  // 0 → 1 from scroll progress
 
   varying float vAlpha;
-  varying float vSize;
 
   void main() {
-    vec3 pos = position;
+    vec2 pos = aBase;
 
-    // Rise upward — cycle with mod so bubbles loop
-    float cycle = mod(pos.y + uTime * aSpeed * 0.3 + aOffset * 10.0, 8.0) - 4.0;
-    pos.y = cycle;
+    // Rise upward, cycle through y range [-1.4, 1.4]
+    float cycle = mod(pos.y - 1.4 + uTime * aSpeed * 0.18 + aOffset * 4.0, 2.8);
+    pos.y = cycle - 1.4;
 
-    // Gentle horizontal wobble
-    pos.x += sin(uTime * 0.8 + aOffset * 6.28) * 0.15 * aSize;
-    pos.x += sin(uTime * 1.3 + aOffset * 3.14) * 0.08;
+    // Horizontal wobble
+    pos.x += sin(uTime * 0.7 + aOffset * 6.28) * 0.04;
+    pos.x += sin(uTime * 1.4 + aOffset * 3.14) * 0.02;
 
-    // Slight z wobble for depth
-    pos.z += cos(uTime * 0.5 + aOffset * 4.0) * 0.1;
+    // Mouse repulsion
+    vec2 toMouse = pos - uMouse;
+    toMouse.x *= uAspect;
+    float distToMouse = length(toMouse);
+    float push = smoothstep(0.35, 0.0, distToMouse) * 0.12;
+    pos += normalize(toMouse + vec2(0.0001)) * push;
 
-    // Mouse interaction — bubbles gently pushed away
-    vec2 mouseWorld = uMouse * 6.0 - 3.0;
-    float distToMouse = distance(pos.xy, mouseWorld);
-    float push = smoothstep(1.5, 0.0, distToMouse) * 0.4;
-    pos.xy += normalize(pos.xy - mouseWorld + 0.001) * push;
+    // Fade at top/bottom of cycle
+    float fadeIn  = smoothstep(-1.35, -1.15, pos.y);
+    float fadeOut = 1.0 - smoothstep(1.15, 1.35, pos.y);
+    vAlpha = (0.28 + aSize * 0.38) * fadeIn * fadeOut * uVisibility;
 
-    vSize = aSize;
-    vAlpha = 0.15 + aSize * 0.35;
-    // Fade at top and bottom
-    float edgeFade = smoothstep(-4.0, -3.0, pos.y) * smoothstep(4.0, 3.0, pos.y);
-    vAlpha *= edgeFade;
-
-    vec4 mvPos = modelViewMatrix * vec4(pos, 1.0);
-    gl_PointSize = (3.0 + aSize * 12.0) * (1.0 / -mvPos.z);
-    gl_Position = projectionMatrix * mvPos;
+    // Strong size contrast: small are tiny, large are huge (quadratic)
+    gl_PointSize = 12.0 + aSize * aSize * 260.0;
+    gl_Position = vec4(pos, 0.0, 1.0);
   }
 `
 
 const bubbleFragment = /* glsl */ `
   precision highp float;
   varying float vAlpha;
-  varying float vSize;
 
   void main() {
     vec2 center = gl_PointCoord - 0.5;
     float dist = length(center);
     if (dist > 0.5) discard;
 
-    // Bubble: bright rim, transparent center
-    float rim = smoothstep(0.3, 0.48, dist) * smoothstep(0.5, 0.46, dist);
-    float inner = smoothstep(0.5, 0.1, dist) * 0.08;
-    float highlight = smoothstep(0.25, 0.15, length(center - vec2(-0.15, 0.15))) * 0.5;
+    // Thin rim — narrow band near edge
+    float rimInner = smoothstep(0.44, 0.47, dist);
+    float rimOuter = 1.0 - smoothstep(0.47, 0.49, dist);
+    float rim = rimInner * rimOuter;
 
-    float alpha = (rim * 0.6 + inner + highlight) * vAlpha;
+    // Soft inner body — very faint glow
+    float inner = (1.0 - smoothstep(0.0, 0.46, dist)) * 0.06;
 
-    // Slight blue-white tint
+    // Large soft specular highlight (upper-left) — main light source
+    vec2 hlCenter = center - vec2(-0.18, 0.18);
+    float hlDist = length(hlCenter);
+    float highlightSoft = (1.0 - smoothstep(0.0, 0.22, hlDist)) * 0.6;
+    float highlightCore = (1.0 - smoothstep(0.0, 0.08, hlDist)) * 1.0;
+    float highlight = highlightSoft + highlightCore;
+
+    // Small secondary highlight (lower-right) — reflection for depth
+    vec2 hl2Center = center - vec2(0.18, -0.18);
+    float highlight2 = (1.0 - smoothstep(0.0, 0.07, length(hl2Center))) * 0.35;
+
+    float alpha = (rim * 0.9 + inner + highlight * 0.75 + highlight2 * 0.6) * vAlpha;
+
     vec3 color = mix(
-      vec3(0.5, 0.75, 0.9),   // blue tint
-      vec3(0.9, 0.95, 1.0),   // white highlight
-      highlight
+      vec3(0.65, 0.85, 0.98),
+      vec3(1.0, 1.0, 1.0),
+      clamp(highlight, 0.0, 1.0)
     );
 
     gl_FragColor = vec4(color, alpha);
   }
 `
 
-export default function BubbleField({ className }: { className?: string }) {
+interface Props {
+  className?: string
+  triggerId?: string
+}
+
+export default function BubbleField({ className, triggerId }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const prefersReduced = useReducedMotion()
 
@@ -92,55 +111,56 @@ export default function BubbleField({ className }: { className?: string }) {
     container.appendChild(gl.canvas)
     gl.canvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;'
 
-    const camera = new Camera(gl, { fov: 45 })
-    camera.position.z = 5
-
-    const COUNT = 120
-    const positions = new Float32Array(COUNT * 3)
+    // Sparse, subtle background bubbles
+    const COUNT = 6
+    const base = new Float32Array(COUNT * 2)
     const sizes = new Float32Array(COUNT)
     const speeds = new Float32Array(COUNT)
     const offsets = new Float32Array(COUNT)
 
     for (let i = 0; i < COUNT; i++) {
-      positions[i * 3]     = (Math.random() - 0.5) * 6  // x spread
-      positions[i * 3 + 1] = (Math.random() - 0.5) * 8  // y spread
-      positions[i * 3 + 2] = (Math.random() - 0.5) * 3  // z depth
-      sizes[i] = 0.2 + Math.random() * 0.8
-      speeds[i] = 0.5 + Math.random() * 1.5
+      base[i * 2]     = (Math.random() - 0.5) * 2.4
+      base[i * 2 + 1] = (Math.random() - 0.5) * 2.4
+      // Bimodal-ish: bias either small or large for contrast
+      const r = Math.random()
+      sizes[i]   = r < 0.5 ? r * 0.6 : 0.6 + (r - 0.5) * 0.8
+      speeds[i]  = 0.4 + Math.random() * 1.2
       offsets[i] = Math.random()
     }
 
     const geometry = new Geometry(gl, {
-      position: { size: 3, data: positions },
-      aSize:    { size: 1, data: sizes },
-      aSpeed:   { size: 1, data: speeds },
-      aOffset:  { size: 1, data: offsets },
+      aBase:   { size: 2, data: base },
+      aSize:   { size: 1, data: sizes },
+      aSpeed:  { size: 1, data: speeds },
+      aOffset: { size: 1, data: offsets },
     })
 
     const program = new Program(gl, {
       vertex: bubbleVertex,
       fragment: bubbleFragment,
       uniforms: {
-        uTime:  { value: 0 },
-        uMouse: { value: [0.5, 0.5] },
+        uTime:       { value: 0 },
+        uMouse:      { value: [0, 0] },
+        uAspect:     { value: 1 },
+        uVisibility: { value: triggerId ? 0 : 1 },
       },
       transparent: true,
       depthTest: false,
     })
 
     const mesh = new Mesh(gl, { mode: gl.POINTS, geometry, program })
-    const mouse = { x: 0.5, y: 0.5 }
 
+    const mouse = { x: 0, y: 0 }
     const onMove = (e: MouseEvent) => {
-      mouse.x = e.clientX / window.innerWidth
-      mouse.y = 1.0 - e.clientY / window.innerHeight
+      mouse.x = (e.clientX / window.innerWidth) * 2.0 - 1.0
+      mouse.y = -((e.clientY / window.innerHeight) * 2.0 - 1.0)
     }
     window.addEventListener('mousemove', onMove)
 
     const resize = () => {
       const { width, height } = container.getBoundingClientRect()
       renderer.setSize(width, height)
-      camera.perspective({ aspect: width / height })
+      program.uniforms.uAspect.value = width / height
     }
     resize()
     window.addEventListener('resize', resize)
@@ -150,17 +170,32 @@ export default function BubbleField({ className }: { className?: string }) {
       rafId = requestAnimationFrame(animate)
       program.uniforms.uTime.value = t * 0.001
       program.uniforms.uMouse.value = [mouse.x, mouse.y]
-      renderer.render({ scene: mesh, camera })
+      renderer.render({ scene: mesh })
     }
     rafId = requestAnimationFrame(animate)
 
+    // Link visibility to scroll progress so bubbles fade in with wave
+    let trigger: ScrollTrigger | undefined
+    if (triggerId) {
+      trigger = ScrollTrigger.create({
+        trigger: `#${triggerId}`,
+        start: 'top+=10% top',
+        end: 'bottom center',
+        scrub: 0.8,
+        onUpdate: (self) => {
+          program.uniforms.uVisibility.value = self.progress
+        },
+      })
+    }
+
     return () => {
       cancelAnimationFrame(rafId)
+      trigger?.kill()
       window.removeEventListener('resize', resize)
       window.removeEventListener('mousemove', onMove)
       if (container.contains(gl.canvas)) container.removeChild(gl.canvas)
     }
-  }, [prefersReduced])
+  }, [prefersReduced, triggerId])
 
   if (prefersReduced) return null
 

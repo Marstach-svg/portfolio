@@ -1,35 +1,27 @@
-'use client'
-
-import dynamic from 'next/dynamic'
 import Hero from '@/components/sections/Hero'
 import About from '@/components/sections/About'
 import Projects from '@/components/sections/Projects'
 import Contact from '@/components/sections/Contact'
-import UnderwaterWrapper from '@/components/sections/UnderwaterWrapper'
-
-const WaveTransition = dynamic(
-  () => import('@/components/webgl/WaveTransition'),
-  { ssr: false }
-)
+import WaterBackground from '@/components/webgl/WaterBackground'
+import HeroFish from '@/components/ui/HeroFish'
 
 export default function Home() {
   return (
     <>
+      {/* Fixed full-viewport water canvas — behind content, above page bg */}
+      <WaterBackground />
+
       <Hero />
 
-      {/* Wave transition — sticks to viewport, animates on scroll through wave-zone */}
-      <div id="wave-zone" className="relative h-[80vh]">
-        <div className="sticky top-0 h-svh overflow-hidden">
-          <WaveTransition triggerId="wave-zone" className="absolute inset-0" />
-        </div>
-      </div>
+      {/* Fish morphs in from the "R" letter and swims downward */}
+      <HeroFish />
 
-      {/* Underwater sections */}
-      <UnderwaterWrapper>
+      {/* Underwater sections — layered above the fixed water */}
+      <div className="relative" style={{ zIndex: 10 }}>
         <About />
         <Projects />
         <Contact />
-      </UnderwaterWrapper>
+      </div>
     </>
   )
 }

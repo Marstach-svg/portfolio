@@ -1,46 +1,76 @@
-# Portfolio -- ジブリの図書館
+# Portfolio
 
-ジブリ映画のような世界観と大きな図書館を探索する体験を融合させたポートフォリオサイト。スクロールすると図書館の中を歩き回るように各セクションが展開する。
+インタラクティブな WebGL 演出を備えたクリエイティブ・テック・ポートフォリオ。Hero からスクロールすると波が立ち上がり、水中に潜って潜水艦が各コンテンツを案内する体験型サイト。
 
 ## 技術スタック
 
-- Next.js 16 (App Router, TypeScript, Static Export)
-- Tailwind CSS v4
-- GSAP + ScrollTrigger (スクロール連動アニメーション)
-- Framer Motion (UIトランジション)
-- Lucide React
-- Playfair Display + Noto Serif JP + Inter
-- pnpm
-- Cloudflare Pages対応 (output: 'export')
+- **Next.js 16** (App Router, TypeScript, Static Export)
+- **Tailwind CSS v4** (CSS-first config)
+- **GSAP + ScrollTrigger** — スクロール連動アニメーション
+- **OGL** (~5KB) — WebGL シェーダー (波, 泡, パーティクル, 画像歪み)
+- **Lenis** — 慣性スムーズスクロール
+- **pnpm**
+- **Cloudflare Pages** 対応 (`output: 'export'`)
+
+## 実装されている演出
+
+| # | 技術 | コンポーネント |
+|---|------|---------------|
+| 1 | WebGL シェーダー (画像ディストーション + 色収差) | `webgl/ImagePlane.tsx` |
+| 2 | テキストアニメーション (SplitText + スクロール連動) | `ui/TextReveal.tsx` |
+| 3 | カスタムカーソル (dot + ring + magnetic) | `ui/CustomCursor.tsx` |
+| 4 | スムーズスクロール (Lenis + GSAP ticker) | `providers/SmoothScrollProvider.tsx` |
+| 5 | パーティクルフィールド (Hero 背景) | `webgl/ParticleField.tsx` |
+| 6 | ページ遷移アニメーション (オーバーレイワイプ) | `providers/PageTransition.tsx` |
+| 7 | 波のシーン遷移 (Hero → 水中) | `webgl/WaterScene.tsx` |
+| 8 | 水中の泡 (screen-space NDC) | `webgl/BubbleField.tsx` |
+| 9 | R の文字 → 潜水艦モーフィング + セクション案内 | `ui/HeroFish.tsx` |
 
 ## スクロール体験
 
-スクロール = 図書館を歩く体験。GSAP ScrollTrigger の pin + scrub でスクロール量に連動したアニメーションを実現。
+| スクロール位置 | 演出 |
+|---|---|
+| Hero | RYOKEN タイトル + パーティクル + 下に「Scroll」インジケーター |
+| Hero 10% | 波が画面下から立ち上がり始める、R が潜水艦に変化 |
+| Hero 100% | 波が画面全体を覆い、水中へ。潜水艦は画面下付近に潜航 |
+| About | 潜水艦が画面右から About を紹介、泡が浮上 |
+| Projects | 潜水艦が画面左に移動して反転、Projects を紹介 |
+| Contact | 潜水艦が画面右に戻って反転、Contact を紹介 |
 
-| セクション | 図書館の場所 | アニメーション |
-|---|---|---|
-| Hero | 図書館の入口 | 木の扉がスクロールで左右に開く (pin + scrub) |
-| About | 閲覧室 | 額縁写真 + テキストが stagger フェードイン |
-| Skills | 魔法の書棚 | 本が1冊ずつ棚から飛び出す (stagger) |
-| Projects | 研究室のデスク | ポラロイド風カードが回転しながら置かれる |
-| Experience | 年代記の巻物 | タイムラインの線がスクロールで伸びる (scrub) |
-| Contact | 図書館の受付 | 来館者カード風メール表示 |
+## ディレクトリ構成
+
+```
+src/
+├── app/                    # Next.js App Router
+│   ├── layout.tsx
+│   ├── page.tsx
+│   ├── globals.css
+│   └── projects/[slug]/page.tsx
+├── components/
+│   ├── providers/          # SmoothScroll, PageTransition
+│   ├── sections/           # Hero, About, Projects, Contact
+│   ├── ui/                 # Nav, CustomCursor, TextReveal, HeroFish, etc
+│   └── webgl/              # WaterScene, BubbleField, ParticleField, ImagePlane, WaterBackground
+├── data/                   # profile, projects, skills, experience
+├── hooks/                  # useMediaQuery, useReducedMotion
+├── lib/                    # utils
+└── types/                  # TypeScript types
+```
 
 ## デザイン
 
-- カラー: アイボリー (#F5F0E8) 背景、こげ茶 (#2C1810) テキスト
-- アクセント: フォレストグリーン (#4A7C59) + ゴールド (#D4A843)
-- 紙テクスチャ + 水彩風グラデーション
-- Playfair Display (セリフ見出し) + Noto Serif JP (明朝体本文) + Inter (UI)
-- 葉っぱのパララックス浮遊要素
-- 右端にスクロール進捗インジケーター
+- **カラーパレット** (水上): `#FAFAF9` 背景, `#1C1917` テキスト, `#78716C` muted, `#2563EB` accent
+- **カラーパレット** (水中): `#0a1a3a` → `#02081a` のグラデーション, スカイブルー系テキスト
+- **フォント**: Syne (英字タイトル) + Space Grotesk (英字本文) + Inter (UI) + Noto Sans JP (日本語)
+- **波のシェーダー**: multi-frequency sine waves + caustics + light rays + foam crest
+- **泡**: screen-space NDC 6 個、細い輪郭 + 立体的ハイライト (二乗スケールでメリハリ)
 
 ## セットアップ
 
 ```bash
 pnpm install
-pnpm dev
-pnpm build
+pnpm dev          # http://localhost:3000
+pnpm build        # static export to out/
 pnpm lint
 ```
 
@@ -48,11 +78,19 @@ pnpm lint
 
 | 対象 | ファイル |
 |------|----------|
-| 名前・肩書き・SNS | `src/content/profile.ts` |
-| スキル | `src/content/skills.ts` |
-| プロジェクト | `src/content/projects.ts` |
-| 職歴 | `src/content/experience.ts` |
-| サイト名 | `src/app/layout.tsx` の metadata |
+| 名前・肩書き・SNS | `src/data/profile.ts` |
+| スキル | `src/data/skills.ts` |
+| プロジェクト | `src/data/projects.ts` |
+| 職歴 | `src/data/experience.ts` |
+| サイト名 / metadata | `src/app/layout.tsx` |
+
+## パフォーマンス & アクセシビリティ
+
+- WebGL コンポーネントは `dynamic(..., { ssr: false })` で遅延ロード
+- `prefers-reduced-motion` で全アニメーションを無効化
+- カスタムカーソルは `md:` ブレークポイント以上のみ
+- WebGL キャンバスに `role="img"` + `aria-label`
+- Static Export + Cloudflare Pages 対応 (`_headers`, `_redirects`)
 
 ## ライセンス
 
