@@ -1,7 +1,15 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { Renderer, Geometry, Program, Mesh } from 'ogl'
+import {
+  BufferAttribute,
+  BufferGeometry,
+  Camera,
+  Points,
+  RawShaderMaterial,
+  Scene,
+  WebGLRenderer,
+} from 'three'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { useReducedMotion } from '@/hooks/useReducedMotion'
@@ -10,6 +18,8 @@ gsap.registerPlugin(ScrollTrigger)
 
 // Screen-space NDC — no camera, positions directly in [-1, 1]
 const bubbleVertex = /* glsl */ `
+  precision highp float;
+  attribute vec3 position;   // dummy (required by Three.js)
   attribute vec2 aBase;
   attribute float aSize;
   attribute float aSpeed;
@@ -18,7 +28,7 @@ const bubbleVertex = /* glsl */ `
   uniform float uTime;
   uniform vec2  uMouse;
   uniform float uAspect;
-  uniform float uVisibility;  // 0 → 1 from scroll progress
+  uniform float uVisibility;
 
   varying float vAlpha;
 
@@ -43,10 +53,13 @@ const bubbleVertex = /* glsl */ `
     // Fade at top/bottom of cycle
     float fadeIn  = smoothstep(-1.35, -1.15, pos.y);
     float fadeOut = 1.0 - smoothstep(1.15, 1.35, pos.y);
-    vAlpha = (0.28 + aSize * 0.38) * fadeIn * fadeOut * uVisibility;
+    vAlpha = (0.6 + aSize * 0.4) * fadeIn * fadeOut * uVisibility;
 
-    // Strong size contrast: small are tiny, large are huge (quadratic)
-    gl_PointSize = 12.0 + aSize * aSize * 260.0;
+    // Reference the dummy position so it's not optimized out
+    float _unused = position.x * 0.0;
+
+    // Large bubble sizes
+    gl_PointSize = 30.0 + aSize * 120.0 + _unused;
     gl_Position = vec4(pos, 0.0, 1.0);
   }
 `
@@ -65,17 +78,17 @@ const bubbleFragment = /* glsl */ `
     float rimOuter = 1.0 - smoothstep(0.47, 0.49, dist);
     float rim = rimInner * rimOuter;
 
-    // Soft inner body — very faint glow
+    // Soft inner body
     float inner = (1.0 - smoothstep(0.0, 0.46, dist)) * 0.06;
 
-    // Large soft specular highlight (upper-left) — main light source
+    // Large soft specular highlight + bright core
     vec2 hlCenter = center - vec2(-0.18, 0.18);
     float hlDist = length(hlCenter);
     float highlightSoft = (1.0 - smoothstep(0.0, 0.22, hlDist)) * 0.6;
     float highlightCore = (1.0 - smoothstep(0.0, 0.08, hlDist)) * 1.0;
     float highlight = highlightSoft + highlightCore;
 
-    // Small secondary highlight (lower-right) — reflection for depth
+    // Small secondary highlight
     vec2 hl2Center = center - vec2(0.18, -0.18);
     float highlight2 = (1.0 - smoothstep(0.0, 0.07, length(hl2Center))) * 0.35;
 
@@ -106,49 +119,55 @@ export default function BubbleField({ className, triggerId }: Props) {
     const container = containerRef.current
     if (!container) return
 
-    const renderer = new Renderer({ alpha: true, dpr: Math.min(window.devicePixelRatio, 2) })
-    const gl = renderer.gl
-    container.appendChild(gl.canvas)
-    gl.canvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;'
+    const renderer = new WebGLRenderer({ alpha: true, antialias: false })
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+    container.appendChild(renderer.domElement)
+    renderer.domElement.style.cssText =
+      'position:absolute;inset:0;width:100%;height:100%;'
+
+    const scene = new Scene()
+    const camera = new Camera()
 
     // Sparse, subtle background bubbles
     const COUNT = 6
+    // Dummy position attribute (required by Three.js BufferGeometry)
+    const positions = new Float32Array(COUNT * 3)
     const base = new Float32Array(COUNT * 2)
     const sizes = new Float32Array(COUNT)
     const speeds = new Float32Array(COUNT)
     const offsets = new Float32Array(COUNT)
 
     for (let i = 0; i < COUNT; i++) {
-      base[i * 2]     = (Math.random() - 0.5) * 2.4
+      base[i * 2] = (Math.random() - 0.5) * 2.4
       base[i * 2 + 1] = (Math.random() - 0.5) * 2.4
-      // Bimodal-ish: bias either small or large for contrast
       const r = Math.random()
-      sizes[i]   = r < 0.5 ? r * 0.6 : 0.6 + (r - 0.5) * 0.8
-      speeds[i]  = 0.4 + Math.random() * 1.2
+      sizes[i] = r < 0.5 ? r * 0.6 : 0.6 + (r - 0.5) * 0.8
+      speeds[i] = 0.4 + Math.random() * 1.2
       offsets[i] = Math.random()
     }
 
-    const geometry = new Geometry(gl, {
-      aBase:   { size: 2, data: base },
-      aSize:   { size: 1, data: sizes },
-      aSpeed:  { size: 1, data: speeds },
-      aOffset: { size: 1, data: offsets },
-    })
+    const geometry = new BufferGeometry()
+    geometry.setAttribute('position', new BufferAttribute(positions, 3))
+    geometry.setAttribute('aBase', new BufferAttribute(base, 2))
+    geometry.setAttribute('aSize', new BufferAttribute(sizes, 1))
+    geometry.setAttribute('aSpeed', new BufferAttribute(speeds, 1))
+    geometry.setAttribute('aOffset', new BufferAttribute(offsets, 1))
 
-    const program = new Program(gl, {
-      vertex: bubbleVertex,
-      fragment: bubbleFragment,
+    const material = new RawShaderMaterial({
+      vertexShader: bubbleVertex,
+      fragmentShader: bubbleFragment,
       uniforms: {
-        uTime:       { value: 0 },
-        uMouse:      { value: [0, 0] },
-        uAspect:     { value: 1 },
+        uTime: { value: 0 },
+        uMouse: { value: [0, 0] },
+        uAspect: { value: 1 },
         uVisibility: { value: triggerId ? 0 : 1 },
       },
       transparent: true,
       depthTest: false,
     })
 
-    const mesh = new Mesh(gl, { mode: gl.POINTS, geometry, program })
+    const points = new Points(geometry, material)
+    scene.add(points)
 
     const mouse = { x: 0, y: 0 }
     const onMove = (e: MouseEvent) => {
@@ -159,8 +178,8 @@ export default function BubbleField({ className, triggerId }: Props) {
 
     const resize = () => {
       const { width, height } = container.getBoundingClientRect()
-      renderer.setSize(width, height)
-      program.uniforms.uAspect.value = width / height
+      renderer.setSize(width, height, false)
+      material.uniforms.uAspect.value = width / height
     }
     resize()
     window.addEventListener('resize', resize)
@@ -168,13 +187,12 @@ export default function BubbleField({ className, triggerId }: Props) {
     let rafId: number
     const animate = (t: number) => {
       rafId = requestAnimationFrame(animate)
-      program.uniforms.uTime.value = t * 0.001
-      program.uniforms.uMouse.value = [mouse.x, mouse.y]
-      renderer.render({ scene: mesh })
+      material.uniforms.uTime.value = t * 0.001
+      material.uniforms.uMouse.value = [mouse.x, mouse.y]
+      renderer.render(scene, camera)
     }
     rafId = requestAnimationFrame(animate)
 
-    // Link visibility to scroll progress so bubbles fade in with wave
     let trigger: ScrollTrigger | undefined
     if (triggerId) {
       trigger = ScrollTrigger.create({
@@ -183,7 +201,7 @@ export default function BubbleField({ className, triggerId }: Props) {
         end: 'bottom center',
         scrub: 0.8,
         onUpdate: (self) => {
-          program.uniforms.uVisibility.value = self.progress
+          material.uniforms.uVisibility.value = self.progress
         },
       })
     }
@@ -193,11 +211,18 @@ export default function BubbleField({ className, triggerId }: Props) {
       trigger?.kill()
       window.removeEventListener('resize', resize)
       window.removeEventListener('mousemove', onMove)
-      if (container.contains(gl.canvas)) container.removeChild(gl.canvas)
+      geometry.dispose()
+      material.dispose()
+      renderer.dispose()
+      if (container.contains(renderer.domElement)) {
+        container.removeChild(renderer.domElement)
+      }
     }
   }, [prefersReduced, triggerId])
 
   if (prefersReduced) return null
 
-  return <div ref={containerRef} className={`pointer-events-none ${className ?? ''}`} />
+  return (
+    <div ref={containerRef} className={`pointer-events-none ${className ?? ''}`} />
+  )
 }

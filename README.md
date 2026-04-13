@@ -7,7 +7,7 @@
 - **Next.js 16** (App Router, TypeScript, Static Export)
 - **Tailwind CSS v4** (CSS-first config)
 - **GSAP + ScrollTrigger** — スクロール連動アニメーション
-- **OGL** (~5KB) — WebGL シェーダー (波, 泡, パーティクル, 画像歪み)
+- **Three.js** — WebGL シェーダー (波, 泡, パーティクル, 画像歪み) + 3D 潜水艦モデル
 - **Lenis** — 慣性スムーズスクロール
 - **pnpm**
 - **Cloudflare Pages** 対応 (`output: 'export'`)
@@ -24,7 +24,7 @@
 | 6 | ページ遷移アニメーション (オーバーレイワイプ) | `providers/PageTransition.tsx` |
 | 7 | 波のシーン遷移 (Hero → 水中) | `webgl/WaterScene.tsx` |
 | 8 | 水中の泡 (screen-space NDC) | `webgl/BubbleField.tsx` |
-| 9 | R の文字 → 潜水艦モーフィング + セクション案内 | `ui/HeroFish.tsx` |
+| 9 | R の文字 → Three.js 3D 潜水艦モーフィング + セクション案内 | `ui/HeroFish.tsx` |
 
 ## スクロール体験
 

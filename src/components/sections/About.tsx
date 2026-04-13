@@ -7,24 +7,66 @@ import TextReveal from '@/components/ui/TextReveal'
 import { profile } from '@/data/profile'
 import { skills } from '@/data/skills'
 import { experiences } from '@/data/experience'
+import { educations } from '@/data/education'
 
 gsap.registerPlugin(ScrollTrigger)
 
 export default function About() {
+  const rootRef = useRef<HTMLElement>(null)
+  const photoRef = useRef<HTMLDivElement>(null)
   const skillsRef = useRef<HTMLDivElement>(null)
-  const timelineRef = useRef<HTMLDivElement>(null)
+  const educationRef = useRef<HTMLDivElement>(null)
+  const experienceRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const triggers: ScrollTrigger[] = []
 
+    // Photo: float-in with tilt + halo pulse
+    if (photoRef.current) {
+      const photo = photoRef.current
+      const frame = photo.querySelector('.photo-frame')
+      const halo = photo.querySelector('.photo-halo')
+
+      if (frame) {
+        const anim = gsap.from(frame, {
+          y: 60,
+          opacity: 0,
+          rotation: -8,
+          scale: 0.9,
+          duration: 1.2,
+          ease: 'power3.out',
+          scrollTrigger: {
+            trigger: photo,
+            start: 'top 80%',
+            toggleActions: 'play none none reverse',
+          },
+        })
+        if (anim.scrollTrigger) triggers.push(anim.scrollTrigger)
+      }
+
+      if (halo) {
+        gsap.to(halo, {
+          scale: 1.08,
+          opacity: 0.65,
+          duration: 2.8,
+          ease: 'sine.inOut',
+          repeat: -1,
+          yoyo: true,
+        })
+      }
+    }
+
+    // Skills — pop in with rotation
     if (skillsRef.current) {
       const tags = skillsRef.current.querySelectorAll('.skill-tag')
       const anim = gsap.from(tags, {
-        y: 20,
+        y: 30,
         opacity: 0,
-        stagger: 0.05,
-        duration: 0.6,
-        ease: 'power2.out',
+        rotation: -4,
+        scale: 0.85,
+        stagger: 0.04,
+        duration: 0.7,
+        ease: 'back.out(2)',
         scrollTrigger: {
           trigger: skillsRef.current,
           start: 'top 80%',
@@ -34,16 +76,17 @@ export default function About() {
       if (anim.scrollTrigger) triggers.push(anim.scrollTrigger)
     }
 
-    if (timelineRef.current) {
-      const line = timelineRef.current.querySelector('.timeline-line')
-      const items = timelineRef.current.querySelectorAll('.timeline-item')
+    // Shared timeline animator — used by both Education and Experience
+    const animateTimeline = (container: HTMLDivElement) => {
+      const line = container.querySelector('.timeline-line')
+      const items = container.querySelectorAll('.timeline-item')
 
       if (line) {
         const lineAnim = gsap.from(line, {
           scaleY: 0,
           transformOrigin: 'top',
           scrollTrigger: {
-            trigger: timelineRef.current,
+            trigger: container,
             start: 'top 70%',
             end: 'bottom 50%',
             scrub: 1,
@@ -53,19 +96,39 @@ export default function About() {
       }
 
       const itemsAnim = gsap.from(items, {
-        x: -30,
+        x: -40,
         opacity: 0,
-        stagger: 0.2,
-        duration: 0.8,
-        ease: 'power2.out',
+        rotationY: -25,
+        stagger: 0.18,
+        duration: 0.9,
+        ease: 'power3.out',
         scrollTrigger: {
-          trigger: timelineRef.current,
+          trigger: container,
           start: 'top 75%',
           toggleActions: 'play none none reverse',
         },
       })
       if (itemsAnim.scrollTrigger) triggers.push(itemsAnim.scrollTrigger)
+
+      // Pulse the dots on each item
+      items.forEach((item) => {
+        const dot = item.querySelector('.timeline-dot')
+        if (dot) {
+          gsap.to(dot, {
+            scale: 1.4,
+            opacity: 0.7,
+            duration: 1.6,
+            ease: 'sine.inOut',
+            repeat: -1,
+            yoyo: true,
+            delay: Math.random() * 1.2,
+          })
+        }
+      })
     }
+
+    if (educationRef.current) animateTimeline(educationRef.current)
+    if (experienceRef.current) animateTimeline(experienceRef.current)
 
     return () => {
       triggers.forEach((t) => t.kill())
@@ -75,42 +138,110 @@ export default function About() {
   const categories = [...new Set(skills.map((s) => s.category))]
 
   return (
-    <section id="about" className="py-32 px-6 md:px-12 lg:px-24" aria-label="About">
-      <div className="max-w-4xl mx-auto">
-        {/* Introduction */}
-        <div className="mb-24 space-y-6">
-          <TextReveal tag="h2" className="text-3xl md:text-5xl font-syne font-bold mb-12" scrub={false} underwater>
-            About
-          </TextReveal>
+    <section
+      ref={rootRef}
+      id="about"
+      className="relative py-32 px-6 md:px-12 lg:px-24"
+      aria-label="About"
+    >
+      <div className="max-w-5xl mx-auto">
+        {/* ===== Heading ===== */}
+        <TextReveal
+          tag="h2"
+          className="text-3xl md:text-5xl font-syne font-bold mb-16"
+          scrub={false}
+          underwater
+        >
+          About
+        </TextReveal>
 
-          {profile.introduction.map((text, i) => (
-            <TextReveal
-              key={i}
-              tag="p"
-              className="text-lg md:text-xl leading-relaxed font-noto"
-              scrub
-              stagger={0.01}
-              underwater
+        {/* ===== Photo + Intro (2-column) ===== */}
+        <div className="grid md:grid-cols-[auto_1fr] gap-10 md:gap-16 items-center mb-24">
+          {/* Photo frame */}
+          <div ref={photoRef} className="relative mx-auto md:mx-0 flex-shrink-0">
+            {/* Animated halo glow */}
+            <div
+              className="photo-halo absolute inset-0 -m-6 rounded-full blur-2xl"
+              style={{
+                background:
+                  'radial-gradient(circle, rgba(56,189,248,0.5) 0%, rgba(14,165,233,0.25) 40%, rgba(14,165,233,0) 70%)',
+                opacity: 0.4,
+              }}
+            />
+            {/* Rotating decorative ring */}
+            <div
+              className="absolute inset-0 -m-3 rounded-full border border-sky-300/30"
+              style={{ animation: 'hero-ring-spin 18s linear infinite' }}
+            />
+            <div
+              className="absolute inset-0 -m-5 rounded-full border border-sky-400/15 border-dashed"
+              style={{ animation: 'hero-ring-spin 28s linear infinite reverse' }}
+            />
+            {/* Photo */}
+            <div
+              className="photo-frame relative w-44 h-44 md:w-56 md:h-56 rounded-full overflow-hidden border-2 border-sky-300/40"
+              style={{
+                boxShadow:
+                  '0 0 60px rgba(56,189,248,0.35), inset 0 0 30px rgba(14,116,144,0.35)',
+              }}
             >
-              {text}
-            </TextReveal>
-          ))}
+              <img
+                src={profile.photo ?? '/images/profile/me.svg'}
+                alt={profile.name}
+                className="w-full h-full object-cover"
+              />
+              {/* Subtle caustic overlay */}
+              <div
+                className="absolute inset-0 pointer-events-none mix-blend-overlay opacity-30"
+                style={{
+                  background:
+                    'radial-gradient(circle at 30% 20%, rgba(255,255,255,0.6) 0%, transparent 40%), radial-gradient(circle at 70% 80%, rgba(14,165,233,0.6) 0%, transparent 45%)',
+                }}
+              />
+            </div>
+          </div>
+
+          {/* Intro text */}
+          <div className="space-y-6">
+            <p className="text-sm font-space uppercase tracking-[0.25em] text-sky-300/60">
+              {profile.nameEn} — {profile.title}
+            </p>
+            <h3 className="text-2xl md:text-3xl font-syne font-bold text-sky-100">
+              {profile.name}
+            </h3>
+            {profile.introduction.map((text, i) => (
+              <TextReveal
+                key={i}
+                tag="p"
+                className="text-base md:text-lg leading-relaxed font-noto"
+                scrub
+                stagger={0.01}
+                underwater
+              >
+                {text}
+              </TextReveal>
+            ))}
+          </div>
         </div>
 
-        {/* Skills */}
+        {/* ===== Skills ===== */}
         <div className="mb-24" ref={skillsRef}>
-          <h3 className="text-sm font-space uppercase tracking-[0.2em] text-sky-300/60 mb-8">Skills</h3>
+          <h3 className="text-sm font-space uppercase tracking-[0.2em] text-sky-300/60 mb-8">
+            Skills
+          </h3>
           <div className="space-y-6">
             {categories.map((cat) => (
               <div key={cat}>
-                <p className="text-xs font-space uppercase tracking-wider text-sky-300/40 mb-3">{cat}</p>
+                <p className="text-xs font-space uppercase tracking-wider text-sky-300/40 mb-3">
+                  {cat}
+                </p>
                 <div className="flex flex-wrap gap-2">
                   {skills
                     .filter((s) => s.category === cat)
                     .map((skill) => (
                       <span
                         key={skill.name}
-                        className={`skill-tag inline-block rounded-full border px-4 py-1.5 text-sm font-space ${
+                        className={`skill-tag inline-block rounded-full border px-4 py-1.5 text-sm font-space transition-transform hover:scale-110 ${
                           skill.size === 'large'
                             ? 'bg-sky-200/15 border-sky-300/30 text-sky-100 font-medium'
                             : skill.size === 'medium'
@@ -119,7 +250,9 @@ export default function About() {
                         }`}
                       >
                         {skill.name}
-                        <span className="ml-1.5 text-xs opacity-50">{skill.proficiency}</span>
+                        <span className="ml-1.5 text-xs opacity-50">
+                          {skill.proficiency}
+                        </span>
                       </span>
                     ))}
                 </div>
@@ -128,21 +261,68 @@ export default function About() {
           </div>
         </div>
 
-        {/* Experience */}
-        <div ref={timelineRef}>
-          <h3 className="text-sm font-space uppercase tracking-[0.2em] text-sky-300/60 mb-8">Experience</h3>
+        {/* ===== Education ===== */}
+        <div className="mb-24" ref={educationRef}>
+          <h3 className="text-sm font-space uppercase tracking-[0.2em] text-sky-300/60 mb-8">
+            Education
+          </h3>
           <div className="relative pl-8">
-            <div className="timeline-line absolute left-0 top-0 bottom-0 w-px bg-sky-300/20" />
+            <div className="timeline-line absolute left-0 top-0 bottom-0 w-px bg-gradient-to-b from-sky-300/10 via-sky-300/40 to-sky-300/10" />
+            <div className="space-y-12">
+              {educations.map((edu) => (
+                <div key={edu.id} className="timeline-item relative">
+                  <div className="timeline-dot absolute -left-[34px] top-1.5 w-3 h-3 rounded-full bg-sky-400 ring-4 ring-sky-400/20" />
+                  <p className="text-xs font-space uppercase tracking-wider text-sky-300/50 mb-1">
+                    {edu.period.start} — {edu.period.end}
+                  </p>
+                  <h4 className="text-lg font-syne font-semibold text-sky-100">
+                    {edu.degree}
+                  </h4>
+                  <p className="text-sm text-sky-300/60 font-noto mb-2">
+                    {edu.school}
+                  </p>
+                  <p className="text-sm leading-relaxed font-noto text-sky-200/70">
+                    {edu.summary}
+                  </p>
+                  <div className="flex flex-wrap gap-1.5 mt-3">
+                    {edu.tags.map((tag) => (
+                      <span
+                        key={tag}
+                        className="text-xs rounded border border-sky-300/20 px-2 py-0.5 text-sky-300/50"
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* ===== Work Experience ===== */}
+        <div ref={experienceRef}>
+          <h3 className="text-sm font-space uppercase tracking-[0.2em] text-sky-300/60 mb-8">
+            Work Experience
+          </h3>
+          <div className="relative pl-8">
+            <div className="timeline-line absolute left-0 top-0 bottom-0 w-px bg-gradient-to-b from-sky-300/10 via-sky-300/40 to-sky-300/10" />
             <div className="space-y-12">
               {experiences.map((exp) => (
                 <div key={exp.id} className="timeline-item relative">
-                  <div className="absolute -left-8 top-1.5 w-2 h-2 rounded-full bg-sky-400" />
+                  <div className="timeline-dot absolute -left-[34px] top-1.5 w-3 h-3 rounded-full bg-sky-400 ring-4 ring-sky-400/20" />
                   <p className="text-xs font-space uppercase tracking-wider text-sky-300/50 mb-1">
                     {exp.period.start} — {exp.period.end}
                   </p>
-                  <h4 className="text-lg font-syne font-semibold text-sky-100">{exp.role}</h4>
-                  <p className="text-sm text-sky-300/60 font-noto mb-2">{exp.company}</p>
-                  <p className="text-sm leading-relaxed font-noto text-sky-200/70">{exp.summary}</p>
+                  <h4 className="text-lg font-syne font-semibold text-sky-100">
+                    {exp.role}
+                  </h4>
+                  <p className="text-sm text-sky-300/60 font-noto mb-2">
+                    {exp.company}
+                  </p>
+                  <p className="text-sm leading-relaxed font-noto text-sky-200/70">
+                    {exp.summary}
+                  </p>
                   <div className="flex flex-wrap gap-1.5 mt-3">
                     {exp.tags.map((tag) => (
                       <span

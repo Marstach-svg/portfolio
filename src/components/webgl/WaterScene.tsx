@@ -1,15 +1,23 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { Renderer, Program, Mesh, Plane } from 'ogl'
+import {
+  Camera,
+  Mesh,
+  PlaneGeometry,
+  RawShaderMaterial,
+  Scene,
+  WebGLRenderer,
+} from 'three'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { useReducedMotion } from '@/hooks/useReducedMotion'
 
 gsap.registerPlugin(ScrollTrigger)
 
-// Fullscreen quad — no camera/matrices
+// Fullscreen quad — RawShaderMaterial so we control every declaration
 const waterVertex = /* glsl */ `
+  precision highp float;
   attribute vec3 position;
   attribute vec2 uv;
   varying vec2 vUv;
@@ -20,7 +28,8 @@ const waterVertex = /* glsl */ `
   }
 `
 
-// Combined shader: wave rises, water fills below with caustics + light rays
+// Combined shader: wave rises, water fills below with caustics + light rays.
+// Colors tuned to realistic dive footage — turquoise → navy → dark indigo.
 const waterFragment = /* glsl */ `
   precision highp float;
 
@@ -28,15 +37,15 @@ const waterFragment = /* glsl */ `
   uniform float uProgress;     // 0 → 1 wave rise progress
   varying vec2 vUv;
 
-  vec3 shallowColor = vec3(0.05, 0.18, 0.36);
-  vec3 midColor     = vec3(0.02, 0.08, 0.20);
-  vec3 deepColor    = vec3(0.005, 0.02, 0.08);
+  // Realistic underwater palette (turquoise → navy → dark indigo)
+  vec3 shallowColor = vec3(0.18, 0.62, 0.66);  // ≈ #2e9ea8 bright cyan-teal
+  vec3 midColor     = vec3(0.05, 0.22, 0.38);  // ≈ #0d3861 ocean navy
+  vec3 deepColor    = vec3(0.01, 0.06, 0.15);  // ≈ #031026 dark indigo
 
   void main() {
     vec2 uv = vUv;
 
-    // --- Wave line: rises from y=-0.1 at progress 0 to y=1.1 at progress 1 ---
-    // Extra range ensures it leaves the screen fully underwater at progress=1
+    // --- Wave line: rises from y=-0.05 at progress 0 to y=1.15 at progress 1 ---
     float waterLevel = mix(-0.05, 1.15, uProgress);
 
     // Wave shape — multiple sines for organic feel
@@ -59,7 +68,7 @@ const waterFragment = /* glsl */ `
     vec3 waterColor = mix(shallowColor, midColor, depth);
     waterColor = mix(waterColor, deepColor, pow(depth, 2.0));
 
-    // --- Caustics (bright light patterns) ---
+    // --- Caustics (bright cyan light patterns) ---
     float c1 = sin(uv.x * 14.0 + uTime * 0.7) * sin(uv.y * 11.0 - uTime * 0.5);
     float c2 = sin(uv.x * 9.0 - uTime * 1.0) * sin(uv.y * 15.0 + uTime * 0.6);
     float c3 = sin(uv.x * 18.0 + uTime * 0.4) * sin(uv.y * 13.0 - uTime * 0.8);
@@ -68,19 +77,19 @@ const waterFragment = /* glsl */ `
     caustics = pow(caustics, 5.0);
 
     // Caustics brighter near the surface
-    waterColor += caustics * vec3(0.18, 0.30, 0.45) * (1.0 - depth * 0.6);
+    waterColor += caustics * vec3(0.28, 0.62, 0.75) * (1.0 - depth * 0.55);
 
     // --- Light rays from above ---
     float rayX = uv.x * 3.5 + sin(uTime * 0.2) * 0.3;
     float ray = pow(max(sin(rayX * 6.0), 0.0), 10.0);
-    float rayFade = smoothstep(0.7, 0.0, depth);  // stronger near surface
-    waterColor += vec3(0.20, 0.35, 0.55) * ray * rayFade * 0.25;
+    float rayFade = smoothstep(0.7, 0.0, depth);
+    waterColor += vec3(0.55, 0.78, 0.92) * ray * rayFade * 0.35;
 
-    // --- Foam at wave crest (bright line) ---
+    // --- Foam at wave crest ---
     float crestDist = abs(uv.y - waveLine);
     float foam = 1.0 - smoothstep(0.0, 0.008, crestDist);
     foam *= smoothstep(0.0, 0.03, uProgress);
-    foam *= smoothstep(1.05, 0.95, uProgress);  // fade when fully up
+    foam *= smoothstep(1.05, 0.95, uProgress);
 
     // --- Soft glow above wave line ---
     float aboveDist = uv.y - waveLine;
@@ -114,17 +123,20 @@ export default function WaterScene({ triggerId, className }: Props) {
     const container = containerRef.current
     if (!container) return
 
-    const renderer = new Renderer({ alpha: true, dpr: Math.min(window.devicePixelRatio, 2) })
-    const gl = renderer.gl
-    container.appendChild(gl.canvas)
-    gl.canvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;'
+    const renderer = new WebGLRenderer({ alpha: true, antialias: false })
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+    container.appendChild(renderer.domElement)
+    renderer.domElement.style.cssText =
+      'position:absolute;inset:0;width:100%;height:100%;'
 
-    // Plane in NDC (width/height = 2 so [-1,1] covers full screen)
-    const geometry = new Plane(gl, { width: 2, height: 2 })
+    const scene = new Scene()
+    // Dummy camera — shader writes gl_Position directly, so identity matrices are fine
+    const camera = new Camera()
 
-    const program = new Program(gl, {
-      vertex: waterVertex,
-      fragment: waterFragment,
+    const geometry = new PlaneGeometry(2, 2)
+    const material = new RawShaderMaterial({
+      vertexShader: waterVertex,
+      fragmentShader: waterFragment,
       uniforms: {
         uTime: { value: 0 },
         uProgress: { value: prefersReduced ? 1 : 0 },
@@ -133,11 +145,12 @@ export default function WaterScene({ triggerId, className }: Props) {
       depthTest: false,
     })
 
-    const mesh = new Mesh(gl, { geometry, program })
+    const mesh = new Mesh(geometry, material)
+    scene.add(mesh)
 
     const resize = () => {
       const { width, height } = container.getBoundingClientRect()
-      renderer.setSize(width, height)
+      renderer.setSize(width, height, false)
     }
     resize()
     window.addEventListener('resize', resize)
@@ -145,8 +158,8 @@ export default function WaterScene({ triggerId, className }: Props) {
     let rafId: number
     const animate = (t: number) => {
       rafId = requestAnimationFrame(animate)
-      if (!prefersReduced) program.uniforms.uTime.value = t * 0.001
-      renderer.render({ scene: mesh })
+      if (!prefersReduced) material.uniforms.uTime.value = t * 0.001
+      renderer.render(scene, camera)
     }
     rafId = requestAnimationFrame(animate)
 
@@ -154,12 +167,11 @@ export default function WaterScene({ triggerId, className }: Props) {
     if (!prefersReduced) {
       trigger = ScrollTrigger.create({
         trigger: `#${triggerId}`,
-        // Start a bit after user begins scrolling, finish before Hero fully leaves
         start: 'top+=10% top',
         end: 'bottom center',
         scrub: 0.8,
         onUpdate: (self) => {
-          program.uniforms.uProgress.value = self.progress
+          material.uniforms.uProgress.value = self.progress
         },
       })
     }
@@ -168,9 +180,16 @@ export default function WaterScene({ triggerId, className }: Props) {
       cancelAnimationFrame(rafId)
       trigger?.kill()
       window.removeEventListener('resize', resize)
-      if (container.contains(gl.canvas)) container.removeChild(gl.canvas)
+      geometry.dispose()
+      material.dispose()
+      renderer.dispose()
+      if (container.contains(renderer.domElement)) {
+        container.removeChild(renderer.domElement)
+      }
     }
   }, [triggerId, prefersReduced])
 
-  return <div ref={containerRef} className={`pointer-events-none ${className ?? ''}`} />
+  return (
+    <div ref={containerRef} className={`pointer-events-none ${className ?? ''}`} />
+  )
 }

@@ -1,14 +1,21 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { Renderer, Camera, Geometry, Program, Mesh } from 'ogl'
+import {
+  BufferAttribute,
+  BufferGeometry,
+  PerspectiveCamera,
+  Points,
+  Scene,
+  ShaderMaterial,
+  WebGLRenderer,
+} from 'three'
 import { useReducedMotion } from '@/hooks/useReducedMotion'
 
+// ShaderMaterial auto-injects `position`, `modelViewMatrix`, `projectionMatrix`,
+// so we declare only the CUSTOM attributes / uniforms.
 const particleVertex = /* glsl */ `
-  attribute vec3 position;
   attribute float aRandom;
-  uniform mat4 modelViewMatrix;
-  uniform mat4 projectionMatrix;
   uniform float uTime;
   uniform vec2 uMouse;
 
@@ -55,12 +62,14 @@ export default function ParticleField({ className }: { className?: string }) {
     const container = containerRef.current
     if (!container) return
 
-    const renderer = new Renderer({ alpha: true, dpr: Math.min(window.devicePixelRatio, 2) })
-    const gl = renderer.gl
-    container.appendChild(gl.canvas)
-    gl.canvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;'
+    const renderer = new WebGLRenderer({ alpha: true, antialias: false })
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+    container.appendChild(renderer.domElement)
+    renderer.domElement.style.cssText =
+      'position:absolute;inset:0;width:100%;height:100%;'
 
-    const camera = new Camera(gl, { fov: 45 })
+    const scene = new Scene()
+    const camera = new PerspectiveCamera(45, 1, 0.1, 100)
     camera.position.z = 5
 
     const COUNT = 500
@@ -74,14 +83,13 @@ export default function ParticleField({ className }: { className?: string }) {
       randoms[i] = Math.random()
     }
 
-    const geometry = new Geometry(gl, {
-      position: { size: 3, data: positions },
-      aRandom: { size: 1, data: randoms },
-    })
+    const geometry = new BufferGeometry()
+    geometry.setAttribute('position', new BufferAttribute(positions, 3))
+    geometry.setAttribute('aRandom', new BufferAttribute(randoms, 1))
 
-    const program = new Program(gl, {
-      vertex: particleVertex,
-      fragment: particleFragment,
+    const material = new ShaderMaterial({
+      vertexShader: particleVertex,
+      fragmentShader: particleFragment,
       uniforms: {
         uTime: { value: 0 },
         uMouse: { value: [0.5, 0.5] },
@@ -90,7 +98,9 @@ export default function ParticleField({ className }: { className?: string }) {
       depthTest: false,
     })
 
-    const mesh = new Mesh(gl, { mode: gl.POINTS, geometry, program })
+    const points = new Points(geometry, material)
+    scene.add(points)
+
     const mouse = { x: 0.5, y: 0.5 }
 
     const onMove = (e: MouseEvent) => {
@@ -101,38 +111,40 @@ export default function ParticleField({ className }: { className?: string }) {
 
     const resize = () => {
       const { width, height } = container.getBoundingClientRect()
-      renderer.setSize(width, height)
-      camera.perspective({ aspect: width / height })
+      renderer.setSize(width, height, false)
+      camera.aspect = width / height
+      camera.updateProjectionMatrix()
     }
     resize()
     window.addEventListener('resize', resize)
 
+    let rafId: number | null = null
     if (prefersReduced) {
-      renderer.render({ scene: mesh, camera })
+      renderer.render(scene, camera)
     } else {
-      let rafId: number
       const animate = (t: number) => {
         rafId = requestAnimationFrame(animate)
-        program.uniforms.uTime.value = t * 0.001
-        program.uniforms.uMouse.value = [mouse.x, mouse.y]
-        renderer.render({ scene: mesh, camera })
+        material.uniforms.uTime.value = t * 0.001
+        material.uniforms.uMouse.value = [mouse.x, mouse.y]
+        renderer.render(scene, camera)
       }
       rafId = requestAnimationFrame(animate)
-
-      return () => {
-        cancelAnimationFrame(rafId)
-        window.removeEventListener('resize', resize)
-        window.removeEventListener('mousemove', onMove)
-        if (container.contains(gl.canvas)) container.removeChild(gl.canvas)
-      }
     }
 
     return () => {
+      if (rafId !== null) cancelAnimationFrame(rafId)
       window.removeEventListener('resize', resize)
       window.removeEventListener('mousemove', onMove)
-      if (container.contains(gl.canvas)) container.removeChild(gl.canvas)
+      geometry.dispose()
+      material.dispose()
+      renderer.dispose()
+      if (container.contains(renderer.domElement)) {
+        container.removeChild(renderer.domElement)
+      }
     }
   }, [prefersReduced])
 
-  return <div ref={containerRef} className={`pointer-events-none ${className ?? ''}`} />
+  return (
+    <div ref={containerRef} className={`pointer-events-none ${className ?? ''}`} />
+  )
 }

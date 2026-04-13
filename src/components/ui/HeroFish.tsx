@@ -2,6 +2,23 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import {
+  AmbientLight,
+  BoxGeometry,
+  CircleGeometry,
+  CylinderGeometry,
+  DirectionalLight,
+  DoubleSide,
+  Group,
+  Mesh,
+  MeshBasicMaterial,
+  MeshStandardMaterial,
+  OrthographicCamera,
+  PointLight,
+  Scene,
+  SphereGeometry,
+  WebGLRenderer,
+} from 'three'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { useReducedMotion } from '@/hooks/useReducedMotion'
@@ -9,31 +26,32 @@ import { useReducedMotion } from '@/hooks/useReducedMotion'
 gsap.registerPlugin(ScrollTrigger)
 
 /**
- * The "R" in RYOKEN morphs into a small submarine that dives and
- * then travels side-to-side as the user scrolls. Uses rotationY (3D
- * Y-axis flip) instead of z-rotation for direction changes so the
- * submarine never goes upside-down.
+ * The "R" in RYOKEN morphs into a REAL 3D submarine built from Three.js
+ * primitives. Because it's a true 3D object with volume, the direction
+ * flip is a natural, smooth rotation.y interpolation — no flat moment.
  *
- * Emits small bubbles from the rear as it moves.
- *
- * Rendered via createPortal into document.body so no transformed
- * ancestor can break its `position: fixed` containing block.
+ * The Three.js canvas is rendered via createPortal into document.body so
+ * its `position: fixed` containing block is the viewport. The DOM light
+ * beam and bubble-trail pool are siblings of the canvas.
  */
 
 type Keyframe = {
   scroll: number
-  x: number
+  x: number // viewport-px offset from R center
   y: number
-  rotation: number // z-axis pitch (for diving angle)
-  rotationY: number // y-axis flip (for left/right direction)
+  rotation: number // z-axis pitch (diving angle, deg)
+  rotationY: number // y-axis turn (deg, accumulates beyond 360)
+  beam: number
   opacity: number
 }
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t
+const degToRad = (d: number) => (d * Math.PI) / 180
 const BUBBLE_POOL_SIZE = 14
 
 export default function HeroFish() {
-  const subRef = useRef<HTMLDivElement>(null)
+  const canvasContainerRef = useRef<HTMLDivElement>(null)
+  const beamRef = useRef<HTMLDivElement>(null)
   const bubblesRef = useRef<HTMLDivElement>(null)
   const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null)
   const prefersReduced = useReducedMotion()
@@ -43,42 +61,277 @@ export default function HeroFish() {
   }, [])
 
   useEffect(() => {
-    if (prefersReduced || !portalTarget || !subRef.current) return
+    if (prefersReduced || !portalTarget || !canvasContainerRef.current) return
 
-    const sub = subRef.current
+    const canvasContainer = canvasContainerRef.current
+    const beamEl = beamRef.current
     const bubbleContainer = bubblesRef.current
-    let bubbleEls: HTMLDivElement[] = []
-    if (bubbleContainer) {
-      bubbleEls = Array.from(
-        bubbleContainer.querySelectorAll<HTMLDivElement>('.sub-bubble')
-      )
+    const bubbleEls: HTMLDivElement[] = bubbleContainer
+      ? Array.from(
+          bubbleContainer.querySelectorAll<HTMLDivElement>('.sub-bubble')
+        )
+      : []
+
+    // --- Three.js setup ---
+    const renderer = new WebGLRenderer({ alpha: true, antialias: true })
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+    renderer.setSize(window.innerWidth, window.innerHeight, false)
+    canvasContainer.appendChild(renderer.domElement)
+    renderer.domElement.style.cssText =
+      'position:fixed;inset:0;width:100%;height:100%;pointer-events:none;'
+
+    const scene = new Scene()
+
+    // Orthographic camera: 1 world unit = 1 screen px, centered at (0,0)
+    const camera = new OrthographicCamera(
+      -window.innerWidth / 2,
+      window.innerWidth / 2,
+      window.innerHeight / 2,
+      -window.innerHeight / 2,
+      0.1,
+      2000
+    )
+    camera.position.z = 500
+
+    // Lighting
+    scene.add(new AmbientLight(0x6ba8d9, 0.55))
+    const dirLight = new DirectionalLight(0xffffff, 1.4)
+    dirLight.position.set(-200, 400, 300)
+    scene.add(dirLight)
+    const rimLight = new DirectionalLight(0x7dd3fc, 0.6)
+    rimLight.position.set(300, -200, -100)
+    scene.add(rimLight)
+
+    // --- Submarine group ---
+    const subGroup = new Group()
+    const subMaterials: { opacity: number; transparent: boolean }[] = []
+
+    const addMat = <T extends MeshStandardMaterial | MeshBasicMaterial>(m: T) => {
+      m.transparent = true
+      m.opacity = 0
+      subMaterials.push(m as unknown as { opacity: number; transparent: boolean })
+      return m
     }
 
+    // HULL BODY — yellow ellipsoid (scaled sphere)
+    const hullMat = addMat(
+      new MeshStandardMaterial({
+        color: 0xfacc15,
+        metalness: 0.35,
+        roughness: 0.4,
+      })
+    )
+    const hull = new Mesh(new SphereGeometry(1, 48, 24), hullMat)
+    hull.scale.set(2.1, 1, 1)
+    subGroup.add(hull)
+
+    // HULL SHINE STRIPE (thin lighter band on top)
+    const stripeMat = addMat(
+      new MeshStandardMaterial({
+        color: 0xfef08a,
+        metalness: 0.1,
+        roughness: 0.3,
+        emissive: 0xfde047,
+        emissiveIntensity: 0.15,
+      })
+    )
+    const stripe = new Mesh(new BoxGeometry(3.6, 0.05, 0.8), stripeMat)
+    stripe.position.set(0, 0.68, 0)
+    subGroup.add(stripe)
+
+    // CONNING TOWER
+    const towerMat = addMat(
+      new MeshStandardMaterial({
+        color: 0xeab308,
+        metalness: 0.3,
+        roughness: 0.45,
+      })
+    )
+    const tower = new Mesh(new CylinderGeometry(0.28, 0.34, 0.45, 24), towerMat)
+    tower.position.set(-0.1, 1.05, 0)
+    subGroup.add(tower)
+
+    // PERISCOPE
+    const periscopeMat = addMat(
+      new MeshStandardMaterial({ color: 0xca8a04, metalness: 0.6, roughness: 0.3 })
+    )
+    const periscope = new Mesh(
+      new CylinderGeometry(0.04, 0.04, 0.55, 12),
+      periscopeMat
+    )
+    periscope.position.set(-0.05, 1.5, 0)
+    subGroup.add(periscope)
+
+    // Periscope head
+    const periscopeHeadMat = addMat(
+      new MeshStandardMaterial({
+        color: 0x14b8a6,
+        emissive: 0x14b8a6,
+        emissiveIntensity: 0.6,
+        metalness: 0.2,
+        roughness: 0.2,
+      })
+    )
+    const periscopeHead = new Mesh(
+      new SphereGeometry(0.09, 16, 12),
+      periscopeHeadMat
+    )
+    periscopeHead.position.set(0.08, 1.8, 0)
+    subGroup.add(periscopeHead)
+
+    // TAIL CONNECTOR (red cone-ish cylinder) — on the LEFT (negative X)
+    const tailMat = addMat(
+      new MeshStandardMaterial({
+        color: 0xef4444,
+        metalness: 0.25,
+        roughness: 0.5,
+      })
+    )
+    const tail = new Mesh(
+      new CylinderGeometry(0.42, 0.55, 0.55, 24),
+      tailMat
+    )
+    tail.rotation.z = Math.PI / 2
+    tail.position.set(-2.0, 0, 0)
+    subGroup.add(tail)
+
+    // PROPELLER assembly (child of subGroup so it follows the sub, but
+    // we hold a separate reference to spin it independently)
+    const propellerGroup = new Group()
+    propellerGroup.position.set(-2.35, 0, 0)
+    propellerGroup.rotation.z = Math.PI / 2
+    subGroup.add(propellerGroup)
+
+    const propHubMat = addMat(
+      new MeshStandardMaterial({
+        color: 0xfcd34d,
+        metalness: 0.55,
+        roughness: 0.3,
+      })
+    )
+    const propHub = new Mesh(
+      new CylinderGeometry(0.14, 0.14, 0.1, 16),
+      propHubMat
+    )
+    propellerGroup.add(propHub)
+
+    const bladeMat = addMat(
+      new MeshStandardMaterial({
+        color: 0xdc2626,
+        metalness: 0.4,
+        roughness: 0.4,
+      })
+    )
+    for (let i = 0; i < 3; i++) {
+      const blade = new Mesh(new BoxGeometry(0.08, 0.55, 0.06), bladeMat)
+      blade.rotation.y = (i / 3) * Math.PI * 2
+      blade.position.y = 0.0
+      // Offset blade centers so they radiate from hub
+      const holder = new Group()
+      holder.rotation.y = (i / 3) * Math.PI * 2
+      const b = new Mesh(new BoxGeometry(0.08, 0.5, 0.05), bladeMat)
+      b.position.set(0, 0.3, 0)
+      holder.add(b)
+      propellerGroup.add(holder)
+      blade.visible = false
+    }
+
+    // PORTHOLES (circles on the side, facing camera Z+)
+    const portholeRingMat = addMat(
+      new MeshStandardMaterial({
+        color: 0xea580c,
+        metalness: 0.5,
+        roughness: 0.4,
+      })
+    )
+    const portholeGlassMat = addMat(
+      new MeshStandardMaterial({
+        color: 0x2dd4bf,
+        emissive: 0x14b8a6,
+        emissiveIntensity: 0.7,
+        metalness: 0.0,
+        roughness: 0.1,
+      })
+    )
+
+    const addPorthole = (x: number, z: number) => {
+      const ring = new Mesh(new CircleGeometry(0.22, 24), portholeRingMat)
+      ring.position.set(x, 0, z + 0.02)
+      ring.rotation.y = 0
+      subGroup.add(ring)
+
+      const glass = new Mesh(new CircleGeometry(0.16, 24), portholeGlassMat)
+      glass.position.set(x, 0, z + 0.03)
+      subGroup.add(glass)
+    }
+    addPorthole(-0.35, 1.0)
+    addPorthole(0.4, 1.0)
+    addPorthole(-0.35, -1.0)
+    addPorthole(0.4, -1.0)
+
+    // FRONT COCKPIT WINDOW (teal sphere on the right = front)
+    const cockpitMat = addMat(
+      new MeshStandardMaterial({
+        color: 0x2dd4bf,
+        emissive: 0x14b8a6,
+        emissiveIntensity: 0.3,
+        metalness: 0.2,
+        roughness: 0.15,
+        side: DoubleSide,
+      })
+    )
+    const cockpit = new Mesh(new SphereGeometry(0.38, 24, 16), cockpitMat)
+    cockpit.position.set(1.7, 0, 0)
+    subGroup.add(cockpit)
+
+    // HEADLIGHT (front bright emissive + PointLight)
+    const headlightMat = addMat(
+      new MeshStandardMaterial({
+        color: 0xfef3c7,
+        emissive: 0xfef3c7,
+        emissiveIntensity: 1.8,
+        metalness: 0.1,
+        roughness: 0.1,
+      })
+    )
+    const headlight = new Mesh(new SphereGeometry(0.12, 16, 12), headlightMat)
+    headlight.position.set(2.0, -0.1, 0)
+    subGroup.add(headlight)
+
+    const headlightPoint = new PointLight(0xfff3c4, 1.5, 8, 1.5)
+    headlightPoint.position.set(2.5, 0, 0)
+    subGroup.add(headlightPoint)
+
+    scene.add(subGroup)
+    subGroup.visible = false
+
+    // --- R measurement & keyframes ---
     let attempts = 0
     let rafId = 0
     let trigger: ScrollTrigger | null = null
     let settleId: number | null = null
     let resizeHandler: (() => void) | null = null
+    let waterFullAtScroll = Number.POSITIVE_INFINITY
 
-    // Size the sub from the R letter height (aspect ~1.55:1)
+    // Sub "base size" in pixels (for R center anchor + bubble rear computation)
+    let subBaseW = 200
+    let subBaseH = 130
+
     const computeSize = (r: DOMRect) => {
       const h = Math.max(r.height * 1.0, 90)
       const w = h * 1.55
       return { w, h }
     }
 
-    const place = (r: DOMRect) => {
+    const placeAt = (r: DOMRect) => {
       const { w, h } = computeSize(r)
+      subBaseW = w
+      subBaseH = h
       const centerX = r.left + r.width / 2
       const centerY = r.top + r.height / 2
-      gsap.set(sub, {
-        left: centerX - w / 2,
-        top: centerY - h / 2,
-        width: w,
-        height: h,
-        transformPerspective: 1000,
-        transformOrigin: '50% 50%',
-      })
+      // Map scale so the hull (scale 2.1 × radius 1 = ~4.2 units wide) fills ~85% of w
+      const unitScale = (w * 0.85) / 4.2
+      subGroup.scale.setScalar(unitScale)
       return { centerX, centerY, w, h }
     }
 
@@ -87,11 +340,22 @@ export default function HeroFish() {
       return el.getBoundingClientRect().top + window.scrollY
     }
 
-    // Keyframes + interpolation lookup
     let keyframes: Keyframe[] = []
+    let rCenterX = window.innerWidth / 2
+    let rCenterY = window.innerHeight / 2
+
     const getStateAt = (scroll: number): Keyframe => {
-      if (keyframes.length === 0)
-        return { scroll, x: 0, y: 0, rotation: 0, rotationY: 0, opacity: 0 }
+      if (keyframes.length === 0) {
+        return {
+          scroll,
+          x: 0,
+          y: 0,
+          rotation: 0,
+          rotationY: 0,
+          beam: 0,
+          opacity: 0,
+        }
+      }
       if (scroll <= keyframes[0].scroll) return keyframes[0]
       for (let i = 0; i < keyframes.length - 1; i++) {
         const a = keyframes[i]
@@ -105,6 +369,7 @@ export default function HeroFish() {
             y: lerp(a.y, b.y, t),
             rotation: lerp(a.rotation, b.rotation, t),
             rotationY: lerp(a.rotationY, b.rotationY, t),
+            beam: lerp(a.beam, b.beam, t),
             opacity: lerp(a.opacity, b.opacity, t),
           }
         }
@@ -112,20 +377,17 @@ export default function HeroFish() {
       return keyframes[keyframes.length - 1]
     }
 
-    const buildKeyframes = (rCenterX: number, rCenterY: number) => {
+    const buildKeyframes = () => {
       const vh = window.innerHeight
       const vw = window.innerWidth
 
-      // Target viewport positions for right / left "presentation" spots
       const rightTargetX = vw - 150
       const leftTargetX = 150
       const rightX = rightTargetX - rCenterX
       const leftX = leftTargetX - rCenterX
 
-      // Base Y = center of viewport relative to R's initial center
       const midY = vh / 2 - rCenterY
 
-      // Section positions (document-absolute)
       const heroEl = document.getElementById('hero-trigger')
       const aboutEl = document.getElementById('about')
       const projectsEl = document.getElementById('projects')
@@ -141,35 +403,31 @@ export default function HeroFish() {
 
       const projectsTop = docTop(projectsEl)
       const projectsH = projectsEl?.offsetHeight ?? vh
+      const projectsBottom = projectsTop + projectsH
 
       const contactTop = docTop(contactEl)
       const contactH = contactEl?.offsetHeight ?? vh
 
+      // Bubble emission only after water fully covers the screen.
+      waterFullAtScroll = heroBottom - vh * 0.5 + 20
+
       keyframes = [
-        // 0: start, invisible at R
-        { scroll: heroTop, x: 0, y: 0, rotation: 0, rotationY: 0, opacity: 0 },
-        // 1: gentle crossfade from R — 12% of Hero height to give the morph time
-        { scroll: heroTop + heroH * 0.12, x: 0, y: 5, rotation: 5, rotationY: 0, opacity: 1 },
-        // 2: diving mid-Hero — sub has left the R position, descending at a gentle angle
-        { scroll: heroTop + heroH * 0.55, x: rightX * 0.2, y: midY + 60, rotation: 12, rotationY: 20, opacity: 1 },
-        // 3: end of Hero — sub moving toward right side of viewport, facing left (ready for About)
-        { scroll: heroBottom, x: rightX * 0.7, y: midY + 120, rotation: 10, rotationY: 120, opacity: 1 },
-        // 4: About top — settles at right side, facing left
-        { scroll: aboutTop + aboutH * 0.15, x: rightX, y: midY + 60, rotation: 8, rotationY: 180, opacity: 1 },
-        // 5: About bottom — swam gently downward while at right
-        { scroll: aboutTop + aboutH * 0.85, x: rightX, y: midY + 180, rotation: 14, rotationY: 180, opacity: 1 },
-        // 6: Projects top — crossed diagonally to left side, facing right (rotationY 360 = 0)
-        { scroll: projectsTop + projectsH * 0.15, x: leftX, y: midY + 120, rotation: 8, rotationY: 360, opacity: 1 },
-        // 7: Projects bottom — descended at left
-        { scroll: projectsTop + projectsH * 0.85, x: leftX, y: midY + 240, rotation: 14, rotationY: 360, opacity: 1 },
-        // 8: Contact top — crossed back to right, facing left (rotationY 540)
-        { scroll: contactTop + contactH * 0.15, x: rightX, y: midY + 180, rotation: 8, rotationY: 540, opacity: 1 },
-        // 9: Contact bottom
-        { scroll: contactTop + contactH * 0.85, x: rightX, y: midY + 240, rotation: 14, rotationY: 540, opacity: 1 },
+        { scroll: heroTop, x: 0, y: 0, rotation: 0, rotationY: 0, beam: 0, opacity: 0 },
+        { scroll: heroTop + heroH * 0.12, x: 0, y: 5, rotation: 5, rotationY: 0, beam: 0, opacity: 1 },
+        { scroll: heroTop + heroH * 0.55, x: rightX * 0.2, y: midY + 60, rotation: 12, rotationY: 20, beam: 0, opacity: 1 },
+        { scroll: heroBottom, x: rightX * 0.7, y: midY + 120, rotation: 10, rotationY: 120, beam: 0, opacity: 1 },
+        { scroll: aboutTop + aboutH * 0.15, x: rightX, y: midY + 60, rotation: 8, rotationY: 180, beam: 0.9, opacity: 1 },
+        { scroll: aboutTop + aboutH * 0.85, x: rightX, y: midY + 180, rotation: 14, rotationY: 180, beam: 0.9, opacity: 1 },
+        { scroll: aboutBottom, x: rightX, y: midY + 200, rotation: 12, rotationY: 240, beam: 0, opacity: 1 },
+        { scroll: projectsTop + projectsH * 0.15, x: leftX, y: midY + 120, rotation: 8, rotationY: 360, beam: 0.9, opacity: 1 },
+        { scroll: projectsTop + projectsH * 0.85, x: leftX, y: midY + 240, rotation: 14, rotationY: 360, beam: 0.9, opacity: 1 },
+        { scroll: projectsBottom, x: leftX, y: midY + 260, rotation: 12, rotationY: 420, beam: 0, opacity: 1 },
+        { scroll: contactTop + contactH * 0.15, x: rightX, y: midY + 180, rotation: 8, rotationY: 540, beam: 0.9, opacity: 1 },
+        { scroll: contactTop + contactH * 0.85, x: rightX, y: midY + 240, rotation: 14, rotationY: 540, beam: 0.9, opacity: 1 },
       ]
     }
 
-    // --- Bubble trail emission ---
+    // --- Bubble trail (DOM) ---
     let bubbleIndex = 0
     let lastBubbleTime = 0
     let lastBubbleScroll = -Infinity
@@ -180,14 +438,13 @@ export default function HeroFish() {
       const bubble = bubbleEls[bubbleIndex % bubbleEls.length]
       bubbleIndex++
 
-      const subRect = sub.getBoundingClientRect()
-      // Rear position in viewport coordinates
-      // Facing right → rear is on the LEFT of the bounding box
-      // Facing left → rear is on the RIGHT of the bounding box
-      const rearX = facingLeft
-        ? subRect.right - subRect.width * 0.18
-        : subRect.left + subRect.width * 0.18
-      const rearY = subRect.top + subRect.height * 0.55 + (Math.random() - 0.5) * 8
+      // Sub center on screen = (vw/2 + stateX, vh/2 - (-stateY) ) = (vw/2 + x, vh/2 + y) since y is screen-down
+      // We track from last applyState via subScreenX/Y refs below.
+      const cx = lastScreenX
+      const cy = lastScreenY
+      const rearOffset = subBaseW * 0.42
+      const rearX = facingLeft ? cx + rearOffset : cx - rearOffset
+      const rearY = cy + (Math.random() - 0.5) * 10
       const size = 5 + Math.random() * 7
 
       gsap.killTweensOf(bubble)
@@ -213,22 +470,53 @@ export default function HeroFish() {
       })
     }
 
+    // Track last computed screen position for bubble emission + beam placement
+    let lastScreenX = rCenterX
+    let lastScreenY = rCenterY
+
     const applyState = (scroll: number) => {
       const state = getStateAt(scroll)
       const tNow = performance.now() * 0.001
       const wiggleY = Math.sin(tNow * 1.2) * 3
       const wiggleR = Math.sin(tNow * 1.6) * 1.5
 
-      gsap.set(sub, {
-        opacity: state.opacity,
-        x: state.x,
-        y: state.y + wiggleY,
-        rotation: state.rotation + wiggleR,
-        rotationY: state.rotationY,
-        scale: 0.85 + state.opacity * 0.15,
-      })
+      // Screen (px) position
+      const screenX = rCenterX + state.x
+      const screenY = rCenterY + state.y + wiggleY
+      lastScreenX = screenX
+      lastScreenY = screenY
 
-      // Fade R letter and shrink slightly during morph
+      // Map screen px to 3D world (camera is orthographic pixel-space, Y up)
+      const worldX = screenX - window.innerWidth / 2
+      const worldY = -(screenY - window.innerHeight / 2)
+
+      subGroup.position.set(worldX, worldY, 0)
+      subGroup.rotation.z = degToRad(state.rotation + wiggleR)
+      subGroup.rotation.y = degToRad(state.rotationY)
+      const subScale = (subBaseW * 0.85) / 4.2
+      const opacityScale = 0.85 + state.opacity * 0.15
+      subGroup.scale.setScalar(subScale * opacityScale)
+
+      // Visibility + material opacity (all materials share this opacity)
+      subGroup.visible = state.opacity > 0.005
+      for (const m of subMaterials) m.opacity = state.opacity
+
+      // Spin propeller continuously when visible
+      propellerGroup.rotation.x += state.opacity * 0.35
+
+      // Beam CSS overlay follows the sub
+      if (beamEl) {
+        const normY = ((state.rotationY % 360) + 360) % 360
+        const visibility = Math.abs(Math.cos(degToRad(normY)))
+        const facingLeft = normY > 90 && normY < 270
+        const flip = facingLeft ? -1 : 1
+        beamEl.style.opacity = String(state.beam * visibility)
+        beamEl.style.left = `${screenX}px`
+        beamEl.style.top = `${screenY}px`
+        beamEl.style.transform = `translate(-50%, -50%) scaleX(${flip})`
+      }
+
+      // Fade R letter and shrink during morph
       const rEl = document.getElementById('hero-r-letter')
       if (rEl) {
         rEl.style.opacity = String(1 - state.opacity)
@@ -237,8 +525,8 @@ export default function HeroFish() {
         rEl.style.transformOrigin = 'center center'
       }
 
-      // Emit bubbles when underwater and the user is scrolling
-      if (state.opacity > 0.6) {
+      // Emit bubbles only once water is fully up
+      if (scroll > waterFullAtScroll && state.opacity > 0.6) {
         const scrollDelta = Math.abs(scroll - lastScrollForDelta)
         lastScrollForDelta = scroll
         const enoughTime = tNow - lastBubbleTime > 0.18
@@ -251,6 +539,8 @@ export default function HeroFish() {
           lastBubbleScroll = scroll
         }
       }
+
+      renderer.render(scene, camera)
     }
 
     const setup = () => {
@@ -263,18 +553,11 @@ export default function HeroFish() {
       }
 
       const rect = rEl.getBoundingClientRect()
-      const { centerX: rCenterX, centerY: rCenterY } = place(rect)
-      gsap.set(sub, {
-        opacity: 0,
-        x: 0,
-        y: 0,
-        rotation: 0,
-        rotationY: 0,
-        scale: 0.85,
-      })
+      const placed = placeAt(rect)
+      rCenterX = placed.centerX
+      rCenterY = placed.centerY
 
-      buildKeyframes(rCenterX, rCenterY)
-      // Immediate apply so sub is in correct state before any scroll event
+      buildKeyframes()
       applyState(window.scrollY)
 
       trigger = ScrollTrigger.create({
@@ -290,7 +573,6 @@ export default function HeroFish() {
       gsap.ticker.add(tickerTick)
       ScrollTrigger.refresh()
 
-      // Re-measure after layout settles
       settleId = window.setTimeout(() => {
         if (window.scrollY > window.innerHeight * 0.1) return
         const el = document.getElementById('hero-r-letter')
@@ -300,27 +582,32 @@ export default function HeroFish() {
           Math.abs(newRect.left - rect.left) > 1 ||
           Math.abs(newRect.top - rect.top) > 1
         ) {
-          const placed = place(newRect)
-          buildKeyframes(placed.centerX, placed.centerY)
+          const p2 = placeAt(newRect)
+          rCenterX = p2.centerX
+          rCenterY = p2.centerY
+          buildKeyframes()
           ScrollTrigger.refresh()
           applyState(window.scrollY)
         }
       }, 500)
 
       resizeHandler = () => {
+        renderer.setSize(window.innerWidth, window.innerHeight, false)
+        camera.left = -window.innerWidth / 2
+        camera.right = window.innerWidth / 2
+        camera.top = window.innerHeight / 2
+        camera.bottom = -window.innerHeight / 2
+        camera.updateProjectionMatrix()
+
         const el = document.getElementById('hero-r-letter')
         if (!el) return
-        if (window.scrollY > window.innerHeight * 0.1) {
-          const curRect = el.getBoundingClientRect()
-          buildKeyframes(
-            curRect.left + curRect.width / 2,
-            curRect.top + curRect.height / 2
-          )
-        } else {
-          const newRect = el.getBoundingClientRect()
-          const placed = place(newRect)
-          buildKeyframes(placed.centerX, placed.centerY)
+        const newRect = el.getBoundingClientRect()
+        if (window.scrollY < window.innerHeight * 0.1) {
+          const p2 = placeAt(newRect)
+          rCenterX = p2.centerX
+          rCenterY = p2.centerY
         }
+        buildKeyframes()
         ScrollTrigger.refresh()
         applyState(window.scrollY)
       }
@@ -339,10 +626,26 @@ export default function HeroFish() {
       gsap.ticker.remove(tickerTick)
       if (settleId !== null) window.clearTimeout(settleId)
       if (resizeHandler) window.removeEventListener('resize', resizeHandler)
+
       const rEl = document.getElementById('hero-r-letter')
       if (rEl) {
         rEl.style.opacity = '1'
         rEl.style.transform = ''
+      }
+
+      // Dispose Three.js resources
+      scene.traverse((obj) => {
+        if ((obj as Mesh).isMesh) {
+          const mesh = obj as Mesh
+          mesh.geometry?.dispose()
+          const mat = mesh.material
+          if (Array.isArray(mat)) mat.forEach((m) => m.dispose())
+          else if (mat) (mat as MeshStandardMaterial).dispose()
+        }
+      })
+      renderer.dispose()
+      if (canvasContainer.contains(renderer.domElement)) {
+        canvasContainer.removeChild(renderer.domElement)
       }
     }
   }, [prefersReduced, portalTarget])
@@ -351,22 +654,42 @@ export default function HeroFish() {
 
   return createPortal(
     <>
-      {/* Submarine */}
+      {/* Three.js canvas container */}
       <div
-        ref={subRef}
+        ref={canvasContainerRef}
         className="pointer-events-none"
         style={{
           position: 'fixed',
+          inset: 0,
           zIndex: 2,
-          opacity: 0,
-          willChange: 'transform, opacity',
+          pointerEvents: 'none',
         }}
         aria-hidden="true"
-      >
-        <SubmarineSVG />
-      </div>
+      />
 
-      {/* Bubble trail pool — siblings of sub so they're in world space */}
+      {/* DOM light beam — follows the sub's screen position */}
+      <div
+        ref={beamRef}
+        className="sub-beam pointer-events-none"
+        style={{
+          position: 'fixed',
+          left: 0,
+          top: 0,
+          width: 340,
+          height: 180,
+          transformOrigin: '50% 50%',
+          background:
+            'radial-gradient(ellipse at 0% 50%, rgba(254,240,138,0.55) 0%, rgba(253,224,71,0.28) 22%, rgba(253,224,71,0.08) 45%, rgba(253,224,71,0) 70%)',
+          clipPath: 'polygon(0% 40%, 0% 60%, 100% 100%, 100% 0%)',
+          mixBlendMode: 'screen',
+          opacity: 0,
+          zIndex: 3,
+          willChange: 'opacity, transform, left, top',
+        }}
+        aria-hidden="true"
+      />
+
+      {/* Bubble trail pool */}
       <div
         ref={bubblesRef}
         className="pointer-events-none"
@@ -400,132 +723,5 @@ export default function HeroFish() {
       </div>
     </>,
     portalTarget
-  )
-}
-
-function SubmarineSVG() {
-  return (
-    <svg
-      viewBox="0 0 200 130"
-      className="w-full h-full"
-      style={{ overflow: 'visible' }}
-    >
-      {/* ===== PROPELLER (left side) ===== */}
-      <g transform="translate(28, 70)">
-        <ellipse cx="0" cy="-16" rx="8" ry="14" fill="#ef4444" />
-        <ellipse cx="0" cy="-16" rx="8" ry="14" fill="#ef4444" transform="rotate(120)" />
-        <ellipse cx="0" cy="-16" rx="8" ry="14" fill="#ef4444" transform="rotate(-120)" />
-        <circle r="6" fill="#fcd34d" />
-        <circle r="3" fill="#f97316" />
-      </g>
-
-      {/* ===== TAIL CONNECTOR ===== */}
-      <path d="M 35 52 L 58 50 L 62 92 L 35 88 Z" fill="#ef4444" />
-      <path d="M 38 54 L 55 52 L 55 62 L 38 64 Z" fill="#fca5a5" opacity="0.7" />
-      <path d="M 40 82 L 60 86 L 60 92 L 40 88 Z" fill="#b91c1c" opacity="0.6" />
-
-      {/* ===== MAIN BODY ===== */}
-      <g transform="rotate(-4 115 72)">
-        <ellipse cx="115" cy="72" rx="78" ry="36" fill="#facc15" />
-        <ellipse cx="115" cy="45" rx="55" ry="5" fill="#fef08a" opacity="0.7" />
-        <ellipse cx="115" cy="100" rx="68" ry="6" fill="#ca8a04" opacity="0.55" />
-
-        <g fill="#854d0e">
-          <circle cx="55" cy="100" r="1.1" />
-          <circle cx="70" cy="104" r="1.1" />
-          <circle cx="85" cy="106" r="1.1" />
-          <circle cx="100" cy="107" r="1.1" />
-          <circle cx="115" cy="108" r="1.1" />
-          <circle cx="130" cy="107" r="1.1" />
-          <circle cx="145" cy="106" r="1.1" />
-          <circle cx="160" cy="104" r="1.1" />
-          <circle cx="172" cy="100" r="1.1" />
-        </g>
-
-        <path
-          d="M 70 52 Q 110 44 155 52"
-          stroke="#fef9c3"
-          strokeWidth="2.5"
-          fill="none"
-          strokeLinecap="round"
-          opacity="0.9"
-        />
-
-        {/* Porthole 1 */}
-        <circle cx="88" cy="74" r="12" fill="#ea580c" />
-        <circle cx="88" cy="74" r="9" fill="#2dd4bf" />
-        <circle cx="88" cy="74" r="9" fill="none" stroke="#0f766e" strokeWidth="0.6" />
-        <ellipse cx="85" cy="71" rx="2.5" ry="3" fill="#a7f3d0" opacity="0.85" />
-        <g fill="#7c2d12">
-          <circle cx="88" cy="61" r="0.9" />
-          <circle cx="101" cy="74" r="0.9" />
-          <circle cx="88" cy="87" r="0.9" />
-          <circle cx="75" cy="74" r="0.9" />
-        </g>
-
-        {/* Porthole 2 */}
-        <circle cx="122" cy="74" r="12" fill="#ea580c" />
-        <circle cx="122" cy="74" r="9" fill="#2dd4bf" />
-        <circle cx="122" cy="74" r="9" fill="none" stroke="#0f766e" strokeWidth="0.6" />
-        <ellipse cx="119" cy="71" rx="2.5" ry="3" fill="#a7f3d0" opacity="0.85" />
-        <g fill="#7c2d12">
-          <circle cx="122" cy="61" r="0.9" />
-          <circle cx="135" cy="74" r="0.9" />
-          <circle cx="122" cy="87" r="0.9" />
-          <circle cx="109" cy="74" r="0.9" />
-        </g>
-
-        {/* Front cockpit window */}
-        <ellipse cx="165" cy="74" rx="18" ry="24" fill="#2dd4bf" />
-        <ellipse cx="165" cy="74" rx="18" ry="24" fill="none" stroke="#0f766e" strokeWidth="1.2" />
-        <ellipse cx="157" cy="62" rx="3.5" ry="6" fill="#a7f3d0" opacity="0.85" />
-        <ellipse cx="161" cy="58" rx="1.5" ry="2" fill="#f0fdfa" opacity="0.9" />
-      </g>
-
-      {/* ===== CONNING TOWER ===== */}
-      <path
-        d="M 88 42 Q 90 24 108 22 Q 128 20 130 38 Q 130 46 128 48 L 88 46 Z"
-        fill="#facc15"
-      />
-      <path d="M 90 40 Q 108 36 128 40" stroke="#eab308" strokeWidth="2" fill="none" />
-      <path
-        d="M 92 32 Q 108 28 120 32"
-        stroke="#fef08a"
-        strokeWidth="1.5"
-        fill="none"
-        opacity="0.8"
-      />
-
-      <rect
-        x="115"
-        y="28"
-        width="10"
-        height="7"
-        rx="1.5"
-        fill="#2dd4bf"
-        stroke="#0f766e"
-        strokeWidth="0.6"
-      />
-
-      {/* Periscope */}
-      <path
-        d="M 112 22 Q 116 4 130 2"
-        stroke="#facc15"
-        strokeWidth="5"
-        fill="none"
-        strokeLinecap="round"
-      />
-      <path
-        d="M 112 22 Q 116 4 130 2"
-        stroke="#eab308"
-        strokeWidth="1"
-        fill="none"
-        strokeLinecap="round"
-        opacity="0.6"
-      />
-      <circle cx="132" cy="2" r="4" fill="#facc15" stroke="#eab308" strokeWidth="1" />
-      <circle cx="132" cy="2" r="2.2" fill="#14b8a6" />
-      <circle cx="131" cy="1" r="0.8" fill="#a7f3d0" />
-    </svg>
   )
 }

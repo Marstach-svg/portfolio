@@ -9,6 +9,7 @@ export const profile: Profile = {
     'チーム開発ではコードレビューや技術選定にも積極的に関わり、開発プロセスの改善にも興味があります。',
   ],
   email: 'your@email.com',
+  photo: '/images/profile/me.svg',
   social: [
     { label: 'GitHub', href: 'https://github.com' },
     { label: 'X', href: 'https://x.com' },

@@ -28,12 +28,22 @@ export type Experience = {
   tags: string[]
 }
 
+export type Education = {
+  id: string
+  school: string
+  degree: string
+  period: { start: string; end: string }
+  summary: string
+  tags: string[]
+}
+
 export type Profile = {
   name: string
   nameEn: string
   title: string
   introduction: string[]
   email: string
+  photo?: string
   social: { label: string; href: string }[]
 }
 

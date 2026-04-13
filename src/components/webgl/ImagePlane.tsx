@@ -1,9 +1,27 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { Renderer, Program, Mesh, Plane, Texture } from 'ogl'
+import {
+  Mesh,
+  OrthographicCamera,
+  PlaneGeometry,
+  Scene,
+  ShaderMaterial,
+  Texture,
+  WebGLRenderer,
+} from 'three'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { useReducedMotion } from '@/hooks/useReducedMotion'
+
+// ShaderMaterial auto-injects position / uv / modelViewMatrix / projectionMatrix
+const vertex = /* glsl */ `
+  varying vec2 vUv;
+
+  void main() {
+    vUv = uv;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`
 
 const fragment = /* glsl */ `
   precision highp float;
@@ -32,19 +50,6 @@ const fragment = /* glsl */ `
   }
 `
 
-const vertex = /* glsl */ `
-  attribute vec3 position;
-  attribute vec2 uv;
-  uniform mat4 modelViewMatrix;
-  uniform mat4 projectionMatrix;
-  varying vec2 vUv;
-
-  void main() {
-    vUv = uv;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-  }
-`
-
 interface Props {
   src: string
   alt: string
@@ -64,48 +69,56 @@ export default function ImagePlane({ src, alt, className }: Props) {
     const container = containerRef.current
     if (!container) return
 
-    const renderer = new Renderer({ alpha: true, dpr: Math.min(window.devicePixelRatio, 2) })
-    const gl = renderer.gl
-    container.appendChild(gl.canvas)
-    gl.canvas.style.width = '100%'
-    gl.canvas.style.height = '100%'
+    const renderer = new WebGLRenderer({ alpha: true, antialias: false })
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+    container.appendChild(renderer.domElement)
+    renderer.domElement.style.cssText = 'width:100%;height:100%;display:block;'
 
-    const geometry = new Plane(gl, { widthSegments: 20, heightSegments: 20 })
-    const texture = new Texture(gl)
+    const scene = new Scene()
+    // Orthographic camera fitting a 1x1 plane at z=0
+    const camera = new OrthographicCamera(-0.5, 0.5, 0.5, -0.5, 0.1, 10)
+    camera.position.z = 1
+
+    const geometry = new PlaneGeometry(1, 1, 20, 20)
+
+    const texture = new Texture()
 
     const img = new Image()
     img.crossOrigin = 'anonymous'
-    img.src = src
     img.onload = () => {
       texture.image = img
+      texture.needsUpdate = true
     }
+    img.src = src
 
-    const program = new Program(gl, {
-      vertex,
-      fragment,
+    const material = new ShaderMaterial({
+      vertexShader: vertex,
+      fragmentShader: fragment,
       uniforms: {
         uTexture: { value: texture },
         uHover: { value: 0 },
         uTime: { value: 0 },
         uMouse: { value: [0.5, 0.5] },
       },
+      transparent: false,
     })
 
-    const mesh = new Mesh(gl, { geometry, program })
+    const mesh = new Mesh(geometry, material)
+    scene.add(mesh)
 
     let rafId: number
     const animate = (t: number) => {
       rafId = requestAnimationFrame(animate)
-      program.uniforms.uTime.value = t * 0.001
-      program.uniforms.uHover.value +=
-        (hoverRef.current - program.uniforms.uHover.value) * 0.05
-      program.uniforms.uMouse.value = [mouseRef.current.x, mouseRef.current.y]
-      renderer.render({ scene: mesh })
+      material.uniforms.uTime.value = t * 0.001
+      material.uniforms.uHover.value +=
+        (hoverRef.current - material.uniforms.uHover.value) * 0.05
+      material.uniforms.uMouse.value = [mouseRef.current.x, mouseRef.current.y]
+      renderer.render(scene, camera)
     }
 
     const resize = () => {
       const { width, height } = container.getBoundingClientRect()
-      renderer.setSize(width, height)
+      renderer.setSize(width, height, false)
     }
     resize()
     window.addEventListener('resize', resize)
@@ -134,7 +147,13 @@ export default function ImagePlane({ src, alt, className }: Props) {
       container.removeEventListener('mouseenter', onEnter)
       container.removeEventListener('mouseleave', onLeave)
       container.removeEventListener('mousemove', onMove)
-      if (container.contains(gl.canvas)) container.removeChild(gl.canvas)
+      geometry.dispose()
+      material.dispose()
+      texture.dispose()
+      renderer.dispose()
+      if (container.contains(renderer.domElement)) {
+        container.removeChild(renderer.domElement)
+      }
     }
   }, [src, isDesktop, prefersReduced])
 
