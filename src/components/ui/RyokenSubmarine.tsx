@@ -11,6 +11,7 @@ import {
   CylinderGeometry,
   DirectionalLight,
   DoubleSide,
+  Fog,
   Group,
   Matrix4,
   Mesh,
@@ -29,6 +30,9 @@ import {
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { useReducedMotion } from '@/hooks/useReducedMotion'
+import { BubbleSystem3D } from '@/components/webgl/BubbleSystem3D'
+import { FishShadowSwarm } from '@/components/webgl/FishShadowSwarm'
+import { MoteParticles } from '@/components/webgl/MoteParticles'
 
 gsap.registerPlugin(ScrollTrigger)
 
@@ -54,12 +58,19 @@ type Keyframe = {
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t
 const degToRad = (d: number) => (d * Math.PI) / 180
-const BUBBLE_POOL_SIZE = 32
+
+// Underwater fog: linear, in view-space pixel units. Camera sits at z=500
+// looking at z=0, so view distance = 500 - worldZ. Tuned so the submarine
+// (at worldZ ~ 0) is barely fogged while distant background bubbles, fish
+// silhouettes, and motes blend into the navy depths.
+const FOG_COLOR_HEX = 0x06182f
+const FOG_COLOR_RGB: [number, number, number] = [0.024, 0.094, 0.184]
+const FOG_NEAR = 320
+const FOG_FAR = 1200
 
 export default function RyokenSubmarine() {
   const canvasContainerRef = useRef<HTMLDivElement>(null)
   const beamRef = useRef<HTMLDivElement>(null)
-  const bubblesRef = useRef<HTMLDivElement>(null)
   const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null)
   const prefersReduced = useReducedMotion()
 
@@ -72,12 +83,9 @@ export default function RyokenSubmarine() {
 
     const canvasContainer = canvasContainerRef.current
     const beamEl = beamRef.current
-    const bubbleContainer = bubblesRef.current
-    const bubbleEls: HTMLDivElement[] = bubbleContainer
-      ? Array.from(
-          bubbleContainer.querySelectorAll<HTMLDivElement>('.sub-bubble')
-        )
-      : []
+    const isMobile =
+      typeof window !== 'undefined' &&
+      window.matchMedia('(max-width: 768px)').matches
 
     // --- Three.js setup ---
     const renderer = new WebGLRenderer({ alpha: true, antialias: true })
@@ -88,6 +96,7 @@ export default function RyokenSubmarine() {
       'position:fixed;inset:0;width:100%;height:100%;pointer-events:none;'
 
     const scene = new Scene()
+    scene.fog = new Fog(FOG_COLOR_HEX, FOG_NEAR, FOG_FAR)
 
     // Orthographic camera: 1 world unit = 1 screen px, centered at (0,0)
     const camera = new OrthographicCamera(
@@ -100,10 +109,10 @@ export default function RyokenSubmarine() {
     )
     camera.position.z = 500
 
-    // Lighting
-    scene.add(new AmbientLight(0x6ba8d9, 0.55))
+    // Lighting — slightly cooler ambient, top-down key light, cyan rim
+    scene.add(new AmbientLight(0x4f8ec0, 0.55))
     const dirLight = new DirectionalLight(0xffffff, 1.4)
-    dirLight.position.set(-200, 400, 300)
+    dirLight.position.set(-180, 420, 320)
     scene.add(dirLight)
     const rimLight = new DirectionalLight(0x7dd3fc, 0.6)
     rimLight.position.set(300, -200, -100)
@@ -116,6 +125,7 @@ export default function RyokenSubmarine() {
     const addMat = <T extends MeshStandardMaterial | MeshBasicMaterial>(m: T) => {
       m.transparent = true
       m.opacity = 0
+      m.fog = false
       subMaterials.push(m as unknown as { opacity: number; transparent: boolean })
       return m
     }
@@ -313,6 +323,40 @@ export default function RyokenSubmarine() {
 
     scene.add(subGroup)
     subGroup.visible = false
+
+    // --- 3D underwater effects (bubbles / fish silhouettes / motes) ---
+    const bubbleSystem = new BubbleSystem3D(scene, {
+      mobile: isMobile,
+      fieldW: window.innerWidth,
+      fieldH: window.innerHeight,
+      fogColor: FOG_COLOR_RGB,
+      fogNear: FOG_NEAR,
+      fogFar: FOG_FAR,
+    })
+    const fishSwarm = new FishShadowSwarm(scene, {
+      mobile: isMobile,
+      fieldW: window.innerWidth,
+      fieldH: window.innerHeight,
+      fogColor: FOG_COLOR_RGB,
+      fogNear: FOG_NEAR,
+      fogFar: FOG_FAR,
+    })
+    const motes = new MoteParticles(scene, {
+      mobile: isMobile,
+      fieldW: window.innerWidth,
+      fieldH: window.innerHeight,
+      fogColor: FOG_COLOR_RGB,
+      fogNear: FOG_NEAR,
+      fogFar: FOG_FAR,
+    })
+
+    // Effects start hidden; revealed once water has filled the screen.
+    bubbleSystem.mesh.visible = false
+    fishSwarm.mesh.visible = false
+    motes.points.visible = false
+
+    // dt clock for system updates
+    let lastTime = performance.now() * 0.001
 
     // --- Morph particles (R → submarine) ---
     const MORPH_COUNT = 2400
@@ -666,65 +710,33 @@ export default function RyokenSubmarine() {
       ]
     }
 
-    // --- Bubble trail (DOM) ---
-    let bubbleIndex = 0
+    // --- Bubble trail (3D) ---
     let lastBubbleTime = 0
     let lastBubbleScroll = -Infinity
     let lastScrollForDelta = window.scrollY
+    const emitWorldPos = new Vector3()
 
     const emitBubble = (facingLeft: boolean) => {
-      if (!bubbleEls.length) return
-      const bubble = bubbleEls[bubbleIndex % bubbleEls.length]
-      bubbleIndex++
-
-      // Sub center on screen = (vw/2 + stateX, vh/2 - (-stateY) ) = (vw/2 + x, vh/2 + y) since y is screen-down
-      // We track from last applyState via subScreenX/Y refs below.
-      const cx = lastScreenX
-      const cy = lastScreenY
+      // Rear of submarine in world space (same pixel-units as screen).
       const rearOffset = subBaseW * 0.42
-      const rearX = facingLeft ? cx + rearOffset : cx - rearOffset
-      const rearY = cy + (Math.random() - 0.5) * 10
-      const size = 5 + Math.random() * 7
-
-      gsap.killTweensOf(bubble)
-      gsap.set(bubble, {
-        left: rearX,
-        top: rearY,
-        width: size,
-        height: size,
-        xPercent: -50,
-        yPercent: -50,
-        scale: 1,
-        opacity: 0.75,
-        x: 0,
-        y: 0,
-      })
-      gsap.to(bubble, {
-        x: (facingLeft ? 50 : -50) + (Math.random() - 0.5) * 20,
-        y: -50 - Math.random() * 30,
-        scale: 0.4,
-        opacity: 0,
-        duration: 1.3 + Math.random() * 0.4,
-        ease: 'power1.out',
-      })
+      const rearX =
+        subGroup.position.x + (facingLeft ? rearOffset : -rearOffset)
+      const rearY = subGroup.position.y + (Math.random() - 0.5) * 10
+      emitWorldPos.set(rearX, rearY, subGroup.position.z)
+      bubbleSystem.emit(emitWorldPos, facingLeft)
     }
-
-    // Track last computed screen position for bubble emission + beam placement
-    let lastScreenX = rCenterX
-    let lastScreenY = rCenterY
-
 
     const applyState = (scroll: number) => {
       const state = getStateAt(scroll)
       const tNow = performance.now() * 0.001
+      const dt = Math.min(0.05, Math.max(0, tNow - lastTime))
+      lastTime = tNow
       const wiggleY = Math.sin(tNow * 1.2) * 3
       const wiggleR = Math.sin(tNow * 1.6) * 1.5
 
       // Screen (px) position
       const screenX = rCenterX + state.x
       const screenY = rCenterY + state.y + wiggleY
-      lastScreenX = screenX
-      lastScreenY = screenY
 
       // Map screen px to 3D world (camera is orthographic pixel-space, Y up)
       const worldX = screenX - window.innerWidth / 2
@@ -800,8 +812,14 @@ export default function RyokenSubmarine() {
         rEl.style.transformOrigin = 'center center'
       }
 
+      // Reveal underwater effect layers once water has filled the screen.
+      const waterFilled = scroll > waterFullAtScroll
+      bubbleSystem.mesh.visible = waterFilled
+      fishSwarm.mesh.visible = waterFilled
+      motes.points.visible = waterFilled
+
       // Emit bubbles only once water is fully up
-      if (scroll > waterFullAtScroll && effectiveOpacity > 0.6) {
+      if (waterFilled && effectiveOpacity > 0.6) {
         const scrollDelta = Math.abs(scroll - lastScrollForDelta)
         lastScrollForDelta = scroll
         const enoughTime = tNow - lastBubbleTime > 0.06
@@ -810,11 +828,17 @@ export default function RyokenSubmarine() {
           const normY = ((state.rotationY % 360) + 360) % 360
           const facingLeft = normY > 90 && normY < 270
           emitBubble(facingLeft)
-          emitBubble(facingLeft)
-          emitBubble(facingLeft)
           lastBubbleTime = tNow
           lastBubbleScroll = scroll
         }
+      }
+
+      // Update 3D effect systems every frame (cheap when not visible too,
+      // but most of the cost is GPU draw which is gated by .visible above).
+      if (waterFilled) {
+        bubbleSystem.update(dt, tNow)
+        fishSwarm.update(tNow)
+        motes.update(dt, tNow)
       }
 
       renderer.render(scene, camera)
@@ -877,6 +901,9 @@ export default function RyokenSubmarine() {
         camera.top = window.innerHeight / 2
         camera.bottom = -window.innerHeight / 2
         camera.updateProjectionMatrix()
+        bubbleSystem.resize(window.innerWidth, window.innerHeight)
+        fishSwarm.resize(window.innerWidth, window.innerHeight)
+        motes.resize(window.innerWidth, window.innerHeight)
 
         const el = document.getElementById('hero-r-letter')
         if (!el) return
@@ -913,7 +940,12 @@ export default function RyokenSubmarine() {
         rEl.style.transform = ''
       }
 
-      // Dispose Three.js resources
+      // Dispose 3D effect systems first (they own their geometry+material)
+      bubbleSystem.dispose()
+      fishSwarm.dispose()
+      motes.dispose()
+
+      // Dispose remaining Three.js resources
       scene.traverse((obj) => {
         if ((obj as Mesh).isMesh) {
           const mesh = obj as Mesh
@@ -977,40 +1009,6 @@ export default function RyokenSubmarine() {
         aria-hidden="true"
       />
 
-      {/* Bubble trail pool */}
-      <div
-        ref={bubblesRef}
-        className="pointer-events-none"
-        style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          width: 0,
-          height: 0,
-          zIndex: 2,
-        }}
-        aria-hidden="true"
-      >
-        {Array.from({ length: BUBBLE_POOL_SIZE }).map((_, i) => (
-          <div
-            key={i}
-            className="sub-bubble"
-            style={{
-              position: 'fixed',
-              width: 8,
-              height: 8,
-              borderRadius: '50%',
-              background:
-                'radial-gradient(circle, rgba(224,242,254,0.6) 0%, rgba(186,230,253,0.25) 35%, rgba(125,211,252,0.08) 65%, rgba(125,211,252,0) 100%)',
-              filter: 'blur(2px)',
-              mixBlendMode: 'screen',
-              opacity: 0,
-              pointerEvents: 'none',
-              willChange: 'transform, opacity, filter',
-            }}
-          />
-        ))}
-      </div>
     </>,
     portalTarget
   )

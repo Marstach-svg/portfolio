@@ -45,8 +45,8 @@ const waterFragment = /* glsl */ `
   void main() {
     vec2 uv = vUv;
 
-    // --- Wave line: rises from y=-0.05 at progress 0 to y=1.15 at progress 1 ---
-    float waterLevel = mix(0.22, 1.15, uProgress);
+    // --- Wave line: starts just below the bottom edge and rises past the top ---
+    float waterLevel = mix(-0.08, 1.15, uProgress);
 
     // Wave shape — multiple sines for organic feel
     float waveX = uv.x * 6.283;
@@ -79,11 +79,26 @@ const waterFragment = /* glsl */ `
     // Caustics brighter near the surface
     waterColor += caustics * vec3(0.28, 0.62, 0.75) * (1.0 - depth * 0.55);
 
-    // --- Light rays from above ---
-    float rayX = uv.x * 3.5 + sin(uTime * 0.2) * 0.3;
-    float ray = pow(max(sin(rayX * 6.0), 0.0), 10.0);
-    float rayFade = smoothstep(0.7, 0.0, depth);
-    waterColor += vec3(0.55, 0.78, 0.92) * ray * rayFade * 0.35;
+    // --- Volumetric god rays from above (12 procedural shafts) ---
+    float rayAccum = 0.0;
+    for (int i = 0; i < 12; i++) {
+      float fi = float(i);
+      float seed = fract(sin(fi * 12.9898) * 43758.5453);
+      float seed2 = fract(sin(fi * 78.233 + 4.0) * 43758.5453);
+      float seed3 = fract(sin(fi * 39.346 + 2.0) * 43758.5453);
+      float x0 = seed;
+      float wobble = sin(uTime * 0.35 + fi * 1.7 + seed3 * 6.28) * 0.045;
+      float w = 0.010 + seed2 * 0.030;
+      float dist = abs(uv.x - (x0 + wobble));
+      float r = 1.0 - smoothstep(0.0, w, dist);
+      r = pow(r, 1.6);
+      rayAccum += r * (0.35 + seed * 0.7);
+    }
+    rayAccum *= 0.18;
+    rayAccum = pow(rayAccum, 1.25);
+    float rayFade = smoothstep(0.85, 0.0, depth);
+    float ySoft = smoothstep(1.0, 0.15, uv.y);
+    waterColor += vec3(0.62, 0.85, 0.98) * rayAccum * rayFade * ySoft * 0.85;
 
     // --- Foam at wave crest ---
     float crestDist = abs(uv.y - waveLine);
