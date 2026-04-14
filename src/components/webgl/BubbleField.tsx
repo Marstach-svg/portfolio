@@ -73,26 +73,29 @@ const bubbleFragment = /* glsl */ `
     float dist = length(center);
     if (dist > 0.5) discard;
 
-    // Thin rim — narrow band near edge
-    float rimInner = smoothstep(0.44, 0.47, dist);
-    float rimOuter = 1.0 - smoothstep(0.47, 0.49, dist);
+    // Soft rim — wide, gently fading band
+    float rimInner = smoothstep(0.30, 0.44, dist);
+    float rimOuter = 1.0 - smoothstep(0.44, 0.50, dist);
     float rim = rimInner * rimOuter;
 
     // Soft inner body
-    float inner = (1.0 - smoothstep(0.0, 0.46, dist)) * 0.06;
+    float inner = (1.0 - smoothstep(0.0, 0.48, dist)) * 0.05;
 
-    // Large soft specular highlight + bright core
+    // Large soft specular highlight + softened core
     vec2 hlCenter = center - vec2(-0.18, 0.18);
     float hlDist = length(hlCenter);
-    float highlightSoft = (1.0 - smoothstep(0.0, 0.22, hlDist)) * 0.6;
-    float highlightCore = (1.0 - smoothstep(0.0, 0.08, hlDist)) * 1.0;
+    float highlightSoft = (1.0 - smoothstep(0.0, 0.26, hlDist)) * 0.45;
+    float highlightCore = (1.0 - smoothstep(0.0, 0.12, hlDist)) * 0.55;
     float highlight = highlightSoft + highlightCore;
 
     // Small secondary highlight
     vec2 hl2Center = center - vec2(0.18, -0.18);
-    float highlight2 = (1.0 - smoothstep(0.0, 0.07, length(hl2Center))) * 0.35;
+    float highlight2 = (1.0 - smoothstep(0.0, 0.11, length(hl2Center))) * 0.25;
 
-    float alpha = (rim * 0.9 + inner + highlight * 0.75 + highlight2 * 0.6) * vAlpha;
+    // Global outer fade — no hard edge at disc boundary
+    float softDisc = 1.0 - smoothstep(0.38, 0.50, dist);
+
+    float alpha = (rim * 0.55 + inner + highlight * 0.6 + highlight2 * 0.5) * softDisc * vAlpha;
 
     vec3 color = mix(
       vec3(0.65, 0.85, 0.98),

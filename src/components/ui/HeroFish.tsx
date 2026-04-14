@@ -588,7 +588,8 @@ export default function HeroFish() {
         const scaleX = 0.85 + Math.min(intensity, 1.2) * 0.6
         const scaleY = 0.9 + Math.min(intensity, 1.2) * 0.2
         // Anchor beam at the sub's headlight (front tip), not its center.
-        const frontOffset = subBaseW * 0.42
+        // Slightly inside the hull so the soft glow blends with the sub.
+        const frontOffset = subBaseW * 0.34
         const tiltRad = degToRad(state.rotation)
         const anchorX = screenX + Math.cos(tiltRad) * frontOffset * flip
         const anchorY = screenY + Math.sin(tiltRad) * frontOffset * flip
@@ -762,12 +763,16 @@ export default function HeroFish() {
           position: 'fixed',
           left: 0,
           top: 0,
-          width: 560,
-          height: 240,
+          width: 720,
+          height: 440,
           transformOrigin: '0% 50%',
           background:
-            'radial-gradient(ellipse at 0% 50%, rgba(254,240,138,0.55) 0%, rgba(253,224,71,0.28) 22%, rgba(253,224,71,0.08) 45%, rgba(253,224,71,0) 70%)',
-          clipPath: 'polygon(0% 40%, 0% 60%, 100% 100%, 100% 0%)',
+            'conic-gradient(from 60deg at 0% 50%, rgba(253,224,71,0) 0deg, rgba(254,240,138,0.35) 12deg, rgba(255,247,180,0.85) 30deg, rgba(254,240,138,0.35) 48deg, rgba(253,224,71,0) 60deg)',
+          WebkitMaskImage:
+            'radial-gradient(ellipse 100% 85% at 0% 50%, rgba(0,0,0,1) 8%, rgba(0,0,0,0.75) 38%, rgba(0,0,0,0.28) 70%, rgba(0,0,0,0) 95%)',
+          maskImage:
+            'radial-gradient(ellipse 100% 85% at 0% 50%, rgba(0,0,0,1) 8%, rgba(0,0,0,0.75) 38%, rgba(0,0,0,0.28) 70%, rgba(0,0,0,0) 95%)',
+          filter: 'blur(10px)',
           mixBlendMode: 'screen',
           opacity: 0,
           zIndex: 3,
@@ -824,10 +829,12 @@ export default function HeroFish() {
               height: 8,
               borderRadius: '50%',
               background:
-                'radial-gradient(circle, rgba(224,242,254,0.95) 0%, rgba(125,211,252,0.4) 60%, rgba(125,211,252,0) 100%)',
+                'radial-gradient(circle, rgba(224,242,254,0.6) 0%, rgba(186,230,253,0.25) 35%, rgba(125,211,252,0.08) 65%, rgba(125,211,252,0) 100%)',
+              filter: 'blur(2px)',
+              mixBlendMode: 'screen',
               opacity: 0,
               pointerEvents: 'none',
-              willChange: 'transform, opacity',
+              willChange: 'transform, opacity, filter',
             }}
           />
         ))}
