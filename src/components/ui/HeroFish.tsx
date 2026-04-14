@@ -53,6 +53,7 @@ export default function HeroFish() {
   const canvasContainerRef = useRef<HTMLDivElement>(null)
   const beamRef = useRef<HTMLDivElement>(null)
   const bubblesRef = useRef<HTMLDivElement>(null)
+  const splashRef = useRef<HTMLDivElement>(null)
   const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null)
   const prefersReduced = useReducedMotion()
 
@@ -65,6 +66,7 @@ export default function HeroFish() {
 
     const canvasContainer = canvasContainerRef.current
     const beamEl = beamRef.current
+    const splashEl = splashRef.current
     const bubbleContainer = bubblesRef.current
     const bubbleEls: HTMLDivElement[] = bubbleContainer
       ? Array.from(
@@ -255,13 +257,15 @@ export default function HeroFish() {
     )
 
     const addPorthole = (x: number, z: number) => {
+      const facing = z >= 0 ? 1 : -1
       const ring = new Mesh(new CircleGeometry(0.22, 24), portholeRingMat)
-      ring.position.set(x, 0, z + 0.02)
-      ring.rotation.y = 0
+      ring.position.set(x, 0, z + 0.02 * facing)
+      ring.rotation.y = facing > 0 ? 0 : Math.PI
       subGroup.add(ring)
 
       const glass = new Mesh(new CircleGeometry(0.16, 24), portholeGlassMat)
-      glass.position.set(x, 0, z + 0.03)
+      glass.position.set(x, 0, z + 0.03 * facing)
+      glass.rotation.y = facing > 0 ? 0 : Math.PI
       subGroup.add(glass)
     }
     addPorthole(-0.35, 1.0)
@@ -410,20 +414,25 @@ export default function HeroFish() {
 
       // Bubble emission only after water fully covers the screen.
       waterFullAtScroll = heroBottom - vh * 0.5 + 20
+      // Splash fires once, as the sub first dips into the rising wave.
+      splashAtScroll = heroTop + heroH * 0.18
 
       keyframes = [
         { scroll: heroTop, x: 0, y: 0, rotation: 0, rotationY: 0, beam: 0, opacity: 0 },
         { scroll: heroTop + heroH * 0.12, x: 0, y: 5, rotation: 5, rotationY: 0, beam: 0, opacity: 1 },
         { scroll: heroTop + heroH * 0.55, x: rightX * 0.2, y: midY + 60, rotation: 12, rotationY: 20, beam: 0, opacity: 1 },
         { scroll: heroBottom, x: rightX * 0.7, y: midY + 120, rotation: 10, rotationY: 120, beam: 0, opacity: 1 },
-        { scroll: aboutTop + aboutH * 0.15, x: rightX, y: midY + 60, rotation: 8, rotationY: 180, beam: 0.9, opacity: 1 },
-        { scroll: aboutTop + aboutH * 0.85, x: rightX, y: midY + 180, rotation: 14, rotationY: 180, beam: 0.9, opacity: 1 },
-        { scroll: aboutBottom, x: rightX, y: midY + 200, rotation: 12, rotationY: 240, beam: 0, opacity: 1 },
-        { scroll: projectsTop + projectsH * 0.15, x: leftX, y: midY + 120, rotation: 8, rotationY: 360, beam: 0.9, opacity: 1 },
-        { scroll: projectsTop + projectsH * 0.85, x: leftX, y: midY + 240, rotation: 14, rotationY: 360, beam: 0.9, opacity: 1 },
+        { scroll: aboutTop + aboutH * 0.15, x: rightX, y: midY + 60, rotation: 8, rotationY: 180, beam: 0.7, opacity: 1 },
+        { scroll: aboutTop + aboutH * 0.45, x: rightX, y: midY + 110, rotation: 10, rotationY: 180, beam: 1.2, opacity: 1 },
+        { scroll: aboutTop + aboutH * 0.85, x: rightX * 0.5, y: midY + 180, rotation: 14, rotationY: 200, beam: 0.7, opacity: 1 },
+        { scroll: aboutBottom, x: rightX * 0.2, y: midY + 200, rotation: 12, rotationY: 260, beam: 0.2, opacity: 1 },
+        { scroll: projectsTop + projectsH * 0.35, x: leftX, y: midY + 120, rotation: 8, rotationY: 360, beam: 0.7, opacity: 1 },
+        { scroll: projectsTop + projectsH * 0.6, x: leftX, y: midY + 170, rotation: 10, rotationY: 360, beam: 1.2, opacity: 1 },
+        { scroll: projectsTop + projectsH * 0.85, x: leftX, y: midY + 240, rotation: 14, rotationY: 360, beam: 0.7, opacity: 1 },
         { scroll: projectsBottom, x: leftX, y: midY + 260, rotation: 12, rotationY: 420, beam: 0, opacity: 1 },
-        { scroll: contactTop + contactH * 0.15, x: rightX, y: midY + 180, rotation: 8, rotationY: 540, beam: 0.9, opacity: 1 },
-        { scroll: contactTop + contactH * 0.85, x: rightX, y: midY + 240, rotation: 14, rotationY: 540, beam: 0.9, opacity: 1 },
+        { scroll: contactTop + contactH * 0.15, x: rightX, y: midY + 180, rotation: 8, rotationY: 540, beam: 0.7, opacity: 1 },
+        { scroll: contactTop + contactH * 0.5, x: rightX, y: midY + 210, rotation: 10, rotationY: 540, beam: 1.2, opacity: 1 },
+        { scroll: contactTop + contactH * 0.85, x: rightX, y: midY + 240, rotation: 14, rotationY: 540, beam: 0.7, opacity: 1 },
       ]
     }
 
@@ -474,6 +483,71 @@ export default function HeroFish() {
     let lastScreenX = rCenterX
     let lastScreenY = rCenterY
 
+    // Splash (water entry burst) — one-shot
+    let splashed = false
+    let splashAtScroll = Number.POSITIVE_INFINITY
+    const triggerSplash = (cx: number, cy: number) => {
+      if (!splashEl || splashed) return
+      splashed = true
+      gsap.killTweensOf(splashEl)
+      gsap.set(splashEl, {
+        left: cx,
+        top: cy,
+        xPercent: -50,
+        yPercent: -50,
+        scale: 0.2,
+        opacity: 0,
+        display: 'block',
+      })
+      const tl = gsap.timeline({
+        onComplete: () => {
+          if (splashEl) splashEl.style.display = 'none'
+        },
+      })
+      tl.to(splashEl, { opacity: 0.9, duration: 0.08, ease: 'power2.out' })
+        .to(
+          splashEl,
+          { scale: 2.4, duration: 0.9, ease: 'power2.out' },
+          0
+        )
+        .to(
+          splashEl,
+          { opacity: 0, duration: 0.55, ease: 'power1.in' },
+          '>-0.5'
+        )
+
+      // Burst a few extra bubbles around the entry point
+      for (let i = 0; i < 6; i++) {
+        const b = bubbleEls[bubbleIndex % bubbleEls.length]
+        bubbleIndex++
+        if (!b) break
+        const ang = Math.random() * Math.PI * 2
+        const dist = 20 + Math.random() * 40
+        const size = 6 + Math.random() * 8
+        gsap.killTweensOf(b)
+        gsap.set(b, {
+          left: cx,
+          top: cy,
+          width: size,
+          height: size,
+          xPercent: -50,
+          yPercent: -50,
+          scale: 1,
+          opacity: 0.85,
+          x: 0,
+          y: 0,
+        })
+        gsap.to(b, {
+          x: Math.cos(ang) * dist,
+          y: Math.sin(ang) * dist - 30,
+          scale: 0.3,
+          opacity: 0,
+          duration: 1.0 + Math.random() * 0.4,
+          ease: 'power2.out',
+        })
+      }
+    }
+
     const applyState = (scroll: number) => {
       const state = getStateAt(scroll)
       const tNow = performance.now() * 0.001
@@ -510,10 +584,18 @@ export default function HeroFish() {
         const visibility = Math.abs(Math.cos(degToRad(normY)))
         const facingLeft = normY > 90 && normY < 270
         const flip = facingLeft ? -1 : 1
-        beamEl.style.opacity = String(state.beam * visibility)
-        beamEl.style.left = `${screenX}px`
-        beamEl.style.top = `${screenY}px`
-        beamEl.style.transform = `translate(-50%, -50%) scaleX(${flip})`
+        const intensity = state.beam * visibility
+        const scaleX = 0.85 + Math.min(intensity, 1.2) * 0.6
+        const scaleY = 0.9 + Math.min(intensity, 1.2) * 0.2
+        // Anchor beam at the sub's headlight (front tip), not its center.
+        const frontOffset = subBaseW * 0.42
+        const tiltRad = degToRad(state.rotation)
+        const anchorX = screenX + Math.cos(tiltRad) * frontOffset * flip
+        const anchorY = screenY + Math.sin(tiltRad) * frontOffset * flip
+        beamEl.style.opacity = String(Math.min(1, intensity))
+        beamEl.style.left = `${anchorX}px`
+        beamEl.style.top = `${anchorY}px`
+        beamEl.style.transform = `translate(0, -50%) rotate(${state.rotation * flip}deg) scaleX(${flip * scaleX}) scaleY(${scaleY})`
       }
 
       // Fade R letter and shrink during morph
@@ -523,6 +605,11 @@ export default function HeroFish() {
         rEl.style.transform = `scale(${1 - state.opacity * 0.25})`
         rEl.style.display = 'inline-block'
         rEl.style.transformOrigin = 'center center'
+      }
+
+      // One-shot splash as the sub first touches the wave
+      if (!splashed && scroll >= splashAtScroll && state.opacity > 0.4) {
+        triggerSplash(screenX, screenY)
       }
 
       // Emit bubbles only once water is fully up
@@ -675,9 +762,9 @@ export default function HeroFish() {
           position: 'fixed',
           left: 0,
           top: 0,
-          width: 340,
-          height: 180,
-          transformOrigin: '50% 50%',
+          width: 560,
+          height: 240,
+          transformOrigin: '0% 50%',
           background:
             'radial-gradient(ellipse at 0% 50%, rgba(254,240,138,0.55) 0%, rgba(253,224,71,0.28) 22%, rgba(253,224,71,0.08) 45%, rgba(253,224,71,0) 70%)',
           clipPath: 'polygon(0% 40%, 0% 60%, 100% 100%, 100% 0%)',
@@ -685,6 +772,30 @@ export default function HeroFish() {
           opacity: 0,
           zIndex: 3,
           willChange: 'opacity, transform, left, top',
+        }}
+        aria-hidden="true"
+      />
+
+      {/* Water-entry splash — one-shot on first dive */}
+      <div
+        ref={splashRef}
+        className="pointer-events-none"
+        style={{
+          position: 'fixed',
+          left: 0,
+          top: 0,
+          width: 220,
+          height: 220,
+          borderRadius: '50%',
+          background:
+            'radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(186,230,253,0.55) 35%, rgba(125,211,252,0.2) 60%, rgba(125,211,252,0) 80%)',
+          border: '2px solid rgba(224,242,254,0.7)',
+          boxShadow: '0 0 40px rgba(186,230,253,0.6)',
+          mixBlendMode: 'screen',
+          opacity: 0,
+          display: 'none',
+          zIndex: 4,
+          willChange: 'transform, opacity',
         }}
         aria-hidden="true"
       />
