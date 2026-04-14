@@ -46,7 +46,7 @@ const waterFragment = /* glsl */ `
     vec2 uv = vUv;
 
     // --- Wave line: rises from y=-0.05 at progress 0 to y=1.15 at progress 1 ---
-    float waterLevel = mix(-0.05, 1.15, uProgress);
+    float waterLevel = mix(0.22, 1.15, uProgress);
 
     // Wave shape — multiple sines for organic feel
     float waveX = uv.x * 6.283;

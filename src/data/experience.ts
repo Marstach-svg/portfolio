@@ -2,27 +2,21 @@ import type { Experience } from '@/types'
 
 export const experiences: Experience[] = [
   {
-    id: 'exp-1',
-    company: '株式会社テックカンパニー',
-    role: 'シニアフロントエンドエンジニア',
-    period: { start: '2023年4月', end: '現在' },
-    summary: '大規模Webアプリのフロントエンドアーキテクチャをリード。React/Next.jsでプロダクト開発とチームメンタリングを担当。',
-    tags: ['React', 'Next.js', 'TypeScript'],
-  },
-  {
     id: 'exp-2',
-    company: 'スタートアップ株式会社',
-    role: 'フルスタックエンジニア',
-    period: { start: '2021年1月', end: '2023年3月' },
-    summary: 'SaaSプロダクトの0→1開発に従事。バックエンドからフロントエンド、インフラまで幅広く担当。',
-    tags: ['Node.js', 'React', 'AWS'],
+    company: '株式会社KIYONO',
+    role: 'ソフトウェアエンジニア (エンジニアユニット開発部門)',
+    period: { start: '2025年5月', end: '現在' },
+    summary:
+      'エンジニアユニット開発部門のソフトウェアエンジニアとしてプロダクト開発に従事。慶應義塾大学を休学し長期インターンとしてフルタイムで参画。',
+    tags: ['ソフトウェアエンジニア', '長期インターン', 'フルタイム'],
   },
   {
-    id: 'exp-3',
-    company: 'Web制作会社',
-    role: 'フロントエンドエンジニア',
-    period: { start: '2019年4月', end: '2020年12月' },
-    summary: '企業のコーポレートサイトやLP制作。レスポンシブデザインとアクセシビリティ対応の経験を積む。',
-    tags: ['HTML/CSS', 'JavaScript', 'WordPress'],
+    id: 'exp-1',
+    company: 'TOWN株式会社',
+    role: 'ソフトウェアエンジニア (SaaS事業部)',
+    period: { start: '2024年10月', end: '2025年6月' },
+    summary:
+      'SaaS事業部でソフトウェアエンジニアとして開発業務に従事した長期インターン。',
+    tags: ['SaaS', 'ソフトウェアエンジニア', '長期インターン'],
   },
 ]

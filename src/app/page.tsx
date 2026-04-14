@@ -3,7 +3,7 @@ import About from '@/components/sections/About'
 import Projects from '@/components/sections/Projects'
 import Contact from '@/components/sections/Contact'
 import WaterBackground from '@/components/webgl/WaterBackground'
-import HeroFish from '@/components/ui/HeroFish'
+import RyokenSubmarine from '@/components/ui/RyokenSubmarine'
 
 export default function Home() {
   return (
@@ -13,8 +13,8 @@ export default function Home() {
 
       <Hero />
 
-      {/* Fish morphs in from the "R" letter and swims downward */}
-      <HeroFish />
+      {/* The "R" in RYOKEN morphs into a 3D submarine and swims down */}
+      <RyokenSubmarine />
 
       {/* Underwater sections — layered above the fixed water */}
       <div className="relative" style={{ zIndex: 10 }}>

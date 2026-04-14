@@ -24,7 +24,7 @@
 | 6 | ページ遷移アニメーション (オーバーレイワイプ) | `providers/PageTransition.tsx` |
 | 7 | 波のシーン遷移 (Hero → 水中) | `webgl/WaterScene.tsx` |
 | 8 | 水中の泡 (screen-space NDC) | `webgl/BubbleField.tsx` |
-| 9 | R の文字 → Three.js 3D 潜水艦モーフィング + セクション案内 | `ui/HeroFish.tsx` |
+| 9 | R の文字 → Three.js 3D 潜水艦モーフィング + セクション案内 | `ui/RyokenSubmarine.tsx` |
 
 ## スクロール体験
 
@@ -49,7 +49,7 @@ src/
 ├── components/
 │   ├── providers/          # SmoothScroll, PageTransition
 │   ├── sections/           # Hero, About, Projects, Contact
-│   ├── ui/                 # Nav, CustomCursor, TextReveal, HeroFish, etc
+│   ├── ui/                 # Nav, CustomCursor, TextReveal, RyokenSubmarine, etc
 │   └── webgl/              # WaterScene, BubbleField, ParticleField, ImagePlane, WaterBackground
 ├── data/                   # profile, projects, skills, experience
 ├── hooks/                  # useMediaQuery, useReducedMotion

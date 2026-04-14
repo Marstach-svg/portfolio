@@ -266,38 +266,105 @@ export default function About() {
           <h3 className="text-sm font-space uppercase tracking-[0.2em] text-sky-300/60 mb-8">
             Education
           </h3>
+
+          {/* Standard timeline education */}
           <div className="relative pl-8">
             <div className="timeline-line absolute left-0 top-0 bottom-0 w-px bg-gradient-to-b from-sky-300/10 via-sky-300/40 to-sky-300/10" />
             <div className="space-y-12">
-              {educations.map((edu) => (
-                <div key={edu.id} className="timeline-item relative">
-                  <div className="timeline-dot absolute -left-[34px] top-1.5 w-3 h-3 rounded-full bg-sky-400 ring-4 ring-sky-400/20" />
-                  <p className="text-xs font-space uppercase tracking-wider text-sky-300/50 mb-1">
-                    {edu.period.start} — {edu.period.end}
-                  </p>
-                  <h4 className="text-lg font-syne font-semibold text-sky-100">
-                    {edu.degree}
-                  </h4>
-                  <p className="text-sm text-sky-300/60 font-noto mb-2">
-                    {edu.school}
-                  </p>
-                  <p className="text-sm leading-relaxed font-noto text-sky-200/70">
-                    {edu.summary}
-                  </p>
-                  <div className="flex flex-wrap gap-1.5 mt-3">
-                    {edu.tags.map((tag) => (
-                      <span
-                        key={tag}
-                        className="text-xs rounded border border-sky-300/20 px-2 py-0.5 text-sky-300/50"
-                      >
-                        {tag}
-                      </span>
-                    ))}
+              {educations
+                .filter((e) => e.kind !== 'bubble')
+                .map((edu) => (
+                  <div key={edu.id} className="timeline-item relative">
+                    <div className="timeline-dot absolute -left-[34px] top-1.5 w-3 h-3 rounded-full bg-sky-400 ring-4 ring-sky-400/20" />
+                    <p className="text-xs font-space uppercase tracking-wider text-sky-300/50 mb-1">
+                      {edu.period.start} — {edu.period.end}
+                    </p>
+                    <h4 className="text-lg font-syne font-semibold text-sky-100">
+                      {edu.school}
+                    </h4>
+                    {edu.degree && (
+                      <p className="text-sm text-sky-300/60 font-noto mb-2">
+                        {edu.degree}
+                      </p>
+                    )}
+                    {edu.summary && (
+                      <p className="text-sm leading-relaxed font-noto text-sky-200/70">
+                        {edu.summary}
+                      </p>
+                    )}
+                    {edu.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-3">
+                        {edu.tags.map((tag) => (
+                          <span
+                            key={tag}
+                            className="text-xs rounded border border-sky-300/20 px-2 py-0.5 text-sky-300/50"
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                ))}
             </div>
           </div>
+
+          {/* Bubble cards — non-timeline "extracurricular" education */}
+          {educations.some((e) => e.kind === 'bubble') && (
+            <div className="mt-10 flex flex-wrap gap-6">
+              {educations
+                .filter((e) => e.kind === 'bubble')
+                .map((edu) => (
+                  <div
+                    key={edu.id}
+                    className="edu-bubble relative max-w-md rounded-[2rem] border border-sky-300/30 bg-gradient-to-br from-sky-400/10 via-sky-300/5 to-cyan-400/10 p-6 backdrop-blur-sm"
+                    style={{
+                      boxShadow:
+                        '0 0 40px rgba(56,189,248,0.25), inset 0 0 30px rgba(125,211,252,0.12)',
+                    }}
+                  >
+                    {/* Decorative bubbles */}
+                    <div
+                      className="pointer-events-none absolute -top-3 -right-3 h-6 w-6 rounded-full bg-sky-300/40 blur-[2px]"
+                      aria-hidden="true"
+                    />
+                    <div
+                      className="pointer-events-none absolute -bottom-2 -left-2 h-4 w-4 rounded-full bg-cyan-300/40 blur-[2px]"
+                      aria-hidden="true"
+                    />
+                    <div
+                      className="pointer-events-none absolute top-6 -left-4 h-2 w-2 rounded-full bg-sky-200/50"
+                      aria-hidden="true"
+                    />
+                    <p className="text-[10px] font-space uppercase tracking-[0.25em] text-sky-300/70 mb-2">
+                      Extracurricular
+                    </p>
+                    <h4 className="text-lg font-syne font-semibold text-sky-100">
+                      {edu.school}
+                    </h4>
+                    <p className="text-sm text-sky-300/60 font-noto mb-2">
+                      {edu.degree}
+                    </p>
+                    <p className="text-xs font-space uppercase tracking-wider text-sky-300/50 mb-3">
+                      {edu.period.start} — {edu.period.end}
+                    </p>
+                    <p className="text-sm leading-relaxed font-noto text-sky-200/75">
+                      {edu.summary}
+                    </p>
+                    <div className="flex flex-wrap gap-1.5 mt-3">
+                      {edu.tags.map((tag) => (
+                        <span
+                          key={tag}
+                          className="text-xs rounded-full border border-sky-300/30 bg-sky-400/5 px-2.5 py-0.5 text-sky-200/70"
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+            </div>
+          )}
         </div>
 
         {/* ===== Work Experience ===== */}
@@ -315,10 +382,10 @@ export default function About() {
                     {exp.period.start} — {exp.period.end}
                   </p>
                   <h4 className="text-lg font-syne font-semibold text-sky-100">
-                    {exp.role}
+                    {exp.company}
                   </h4>
                   <p className="text-sm text-sky-300/60 font-noto mb-2">
-                    {exp.company}
+                    {exp.role}
                   </p>
                   <p className="text-sm leading-relaxed font-noto text-sky-200/70">
                     {exp.summary}

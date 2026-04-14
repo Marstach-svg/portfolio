@@ -24,7 +24,7 @@ export default function Hero() {
   useEffect(() => {
     if (prefersReduced || !titleRef.current) return
 
-    // Animate all chars EXCEPT the R — R is handled by HeroFish (submarine morph)
+    // Animate all chars EXCEPT the R — R is handled by RyokenSubmarine (morph)
     // so it must stay at its natural layout position for correct measurement.
     const chars = titleRef.current.querySelectorAll(
       '.hero-char:not(#hero-r-letter)'

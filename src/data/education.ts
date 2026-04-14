@@ -3,20 +3,37 @@ import type { Education } from '@/types'
 export const educations: Education[] = [
   {
     id: 'edu-1',
-    school: '〇〇大学 大学院',
-    degree: '情報工学研究科 修士課程',
-    period: { start: '2017年4月', end: '2019年3月' },
+    school: '慶應義塾大学',
+    degree: '法学部 法律学科',
+    period: { start: '2021年4月', end: '2027年3月 (卒業予定)' },
     summary:
-      'Webシステム・HCI分野で研究に従事。ユーザー体験とパフォーマンス最適化をテーマに修士論文を執筆。',
-    tags: ['HCI', 'Web Systems', '研究'],
+      '法律学を専攻。2024年10月〜2025年10月は休学し、IT 学習と長期インターンでエンジニアとしての基礎を築いた。',
+    tags: ['法律学', '休学中にエンジニア転向'],
   },
   {
     id: 'edu-2',
-    school: '〇〇大学',
-    degree: '工学部 情報工学科',
-    period: { start: '2013年4月', end: '2017年3月' },
+    school: 'RareTECH',
+    degree: 'IT スクール (2年間カリキュラム)',
+    period: { start: '2024年6月', end: '2026年6月' },
     summary:
-      'コンピュータサイエンスの基礎 (アルゴリズム、データ構造、ネットワーク) を学習。在学中にWeb開発のインターンを経験。',
-    tags: ['CS基礎', 'Web開発', 'インターン'],
+      'Web 開発を中心に、フロントエンド・バックエンド・インフラまで一気通貫で学ぶ 2 年間のカリキュラムに所属。',
+    tags: ['Web開発', 'フルスタック', '自走力'],
+    kind: 'bubble',
+  },
+  {
+    id: 'edu-3',
+    school: '慶應義塾高等学校',
+    degree: '普通科',
+    period: { start: '2018年4月', end: '2021年3月' },
+    summary: '高校受験を経て入学。',
+    tags: ['高校受験'],
+  },
+  {
+    id: 'edu-4',
+    school: '目黒区立第八中学校',
+    degree: '',
+    period: { start: '2015年4月', end: '2018年3月' },
+    summary: '',
+    tags: [],
   },
 ]

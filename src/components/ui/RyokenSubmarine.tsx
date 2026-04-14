@@ -5,18 +5,25 @@ import { createPortal } from 'react-dom'
 import {
   AmbientLight,
   BoxGeometry,
+  BufferAttribute,
+  BufferGeometry,
   CircleGeometry,
   CylinderGeometry,
   DirectionalLight,
   DoubleSide,
   Group,
+  Matrix4,
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
+  Object3D,
   OrthographicCamera,
   PointLight,
+  Points,
   Scene,
+  ShaderMaterial,
   SphereGeometry,
+  Vector3,
   WebGLRenderer,
 } from 'three'
 import gsap from 'gsap'
@@ -47,13 +54,12 @@ type Keyframe = {
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t
 const degToRad = (d: number) => (d * Math.PI) / 180
-const BUBBLE_POOL_SIZE = 14
+const BUBBLE_POOL_SIZE = 32
 
-export default function HeroFish() {
+export default function RyokenSubmarine() {
   const canvasContainerRef = useRef<HTMLDivElement>(null)
   const beamRef = useRef<HTMLDivElement>(null)
   const bubblesRef = useRef<HTMLDivElement>(null)
-  const splashRef = useRef<HTMLDivElement>(null)
   const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null)
   const prefersReduced = useReducedMotion()
 
@@ -66,7 +72,6 @@ export default function HeroFish() {
 
     const canvasContainer = canvasContainerRef.current
     const beamEl = beamRef.current
-    const splashEl = splashRef.current
     const bubbleContainer = bubblesRef.current
     const bubbleEls: HTMLDivElement[] = bubbleContainer
       ? Array.from(
@@ -309,6 +314,229 @@ export default function HeroFish() {
     scene.add(subGroup)
     subGroup.visible = false
 
+    // --- Morph particles (R → submarine) ---
+    const MORPH_COUNT = 2400
+    let morphPoints: Points | null = null
+    let morphMaterial: ShaderMaterial | null = null
+    let morphStart = 0
+    let morphEnd = 0
+
+    const sampleRLetterPoints = async (
+      rEl: HTMLElement,
+      count: number,
+      unitScale: number
+    ): Promise<Float32Array | null> => {
+      try {
+        if (document.fonts && document.fonts.ready) await document.fonts.ready
+      } catch {}
+      const rect = rEl.getBoundingClientRect()
+      if (rect.width < 2 || rect.height < 2) return null
+      const dpr = 2
+      const w = Math.ceil(rect.width * dpr)
+      const h = Math.ceil(rect.height * dpr)
+      const canvas = document.createElement('canvas')
+      canvas.width = w
+      canvas.height = h
+      const ctx = canvas.getContext('2d', { willReadFrequently: true })
+      if (!ctx) return null
+      const cs = getComputedStyle(rEl)
+      const weight = cs.fontWeight || '700'
+      const size = parseFloat(cs.fontSize) || 100
+      const family = cs.fontFamily || 'serif'
+      const style = cs.fontStyle || 'normal'
+      ctx.font = `${style} ${weight} ${size * dpr}px ${family}`
+      ctx.textBaseline = 'alphabetic'
+      ctx.fillStyle = '#fff'
+      const metrics = ctx.measureText('R')
+      const textW = metrics.width
+      const ascent = metrics.actualBoundingBoxAscent || size * dpr * 0.75
+      const descent = metrics.actualBoundingBoxDescent || size * dpr * 0.2
+      const drawX = (w - textW) / 2
+      const drawY = (h + ascent - descent) / 2
+      ctx.fillText('R', drawX, drawY)
+
+      const data = ctx.getImageData(0, 0, w, h).data
+      const pxList: number[] = []
+      for (let py = 0; py < h; py++) {
+        for (let px = 0; px < w; px++) {
+          if (data[(py * w + px) * 4 + 3] > 60) {
+            pxList.push(px, py)
+          }
+        }
+      }
+      const total = pxList.length / 2
+      if (total < 10) return null
+
+      const result = new Float32Array(count * 3)
+      for (let i = 0; i < count; i++) {
+        const idx = Math.floor(Math.random() * total) * 2
+        const px = pxList[idx]
+        const py = pxList[idx + 1]
+        // Pixels relative to R rect center, then flip Y (world up), then
+        // convert from screen px to sub-local units (divided by unitScale).
+        const sx = (px / dpr - rect.width / 2) / unitScale
+        const sy = -(py / dpr - rect.height / 2) / unitScale
+        const sz = ((Math.random() - 0.5) * 12) / unitScale
+        result[i * 3 + 0] = sx
+        result[i * 3 + 1] = sy
+        result[i * 3 + 2] = sz
+      }
+      return result
+    }
+
+    const sampleSubmarineSurface = (
+      root: Object3D,
+      count: number
+    ): Float32Array => {
+      root.updateMatrixWorld(true)
+      const rootInv = new Matrix4().copy(root.matrixWorld).invert()
+
+      type Tri = { a: Vector3; b: Vector3; c: Vector3; area: number }
+      const tris: Tri[] = []
+      let totalArea = 0
+
+      root.traverse((obj) => {
+        if (!(obj instanceof Mesh)) return
+        const geom = obj.geometry as BufferGeometry
+        const pos = geom.attributes.position as BufferAttribute | undefined
+        if (!pos) return
+        const toRoot = new Matrix4()
+          .copy(obj.matrixWorld)
+          .premultiply(rootInv)
+        const index = geom.index
+        const triCount = index ? index.count / 3 : pos.count / 3
+        const getV = (i: number) => {
+          const v = new Vector3(pos.getX(i), pos.getY(i), pos.getZ(i))
+          return v.applyMatrix4(toRoot)
+        }
+        for (let t = 0; t < triCount; t++) {
+          const ia = index ? index.getX(t * 3) : t * 3
+          const ib = index ? index.getX(t * 3 + 1) : t * 3 + 1
+          const ic = index ? index.getX(t * 3 + 2) : t * 3 + 2
+          const a = getV(ia)
+          const b = getV(ib)
+          const c = getV(ic)
+          const ab = new Vector3().subVectors(b, a)
+          const ac = new Vector3().subVectors(c, a)
+          const area = new Vector3().crossVectors(ab, ac).length() * 0.5
+          if (area > 1e-8) {
+            tris.push({ a, b, c, area })
+            totalArea += area
+          }
+        }
+      })
+
+      const result = new Float32Array(count * 3)
+      if (tris.length === 0 || totalArea <= 0) return result
+
+      const cdf = new Float32Array(tris.length)
+      let acc = 0
+      for (let i = 0; i < tris.length; i++) {
+        acc += tris[i].area / totalArea
+        cdf[i] = acc
+      }
+
+      for (let i = 0; i < count; i++) {
+        const r = Math.random()
+        let lo = 0
+        let hi = tris.length - 1
+        while (lo < hi) {
+          const mid = (lo + hi) >> 1
+          if (cdf[mid] < r) lo = mid + 1
+          else hi = mid
+        }
+        const tri = tris[lo]
+        let u = Math.random()
+        let v = Math.random()
+        if (u + v > 1) {
+          u = 1 - u
+          v = 1 - v
+        }
+        const ww = 1 - u - v
+        result[i * 3 + 0] = tri.a.x * ww + tri.b.x * u + tri.c.x * v
+        result[i * 3 + 1] = tri.a.y * ww + tri.b.y * u + tri.c.y * v
+        result[i * 3 + 2] = tri.a.z * ww + tri.b.z * u + tri.c.z * v
+      }
+      return result
+    }
+
+    const rebuildMorph = async () => {
+      const rEl = document.getElementById('hero-r-letter')
+      if (!rEl) return
+      const unitScale = (subBaseW * 0.85) / 4.2
+      if (unitScale <= 0) return
+
+      const rPts = await sampleRLetterPoints(rEl, MORPH_COUNT, unitScale)
+      if (!rPts) return
+      const subPts = sampleSubmarineSurface(subGroup, MORPH_COUNT)
+
+      if (!morphPoints) {
+        const geom = new BufferGeometry()
+        geom.setAttribute(
+          'position',
+          new BufferAttribute(new Float32Array(MORPH_COUNT * 3), 3)
+        )
+        geom.setAttribute('aStart', new BufferAttribute(rPts, 3))
+        geom.setAttribute('aEnd', new BufferAttribute(subPts, 3))
+        const offsets = new Float32Array(MORPH_COUNT)
+        for (let i = 0; i < MORPH_COUNT; i++) offsets[i] = Math.random()
+        geom.setAttribute('aOffset', new BufferAttribute(offsets, 1))
+
+        morphMaterial = new ShaderMaterial({
+          uniforms: {
+            uProgress: { value: 0 },
+            uSizeScale: {
+              value: Math.min(window.devicePixelRatio || 1, 2) * 3.0,
+            },
+          },
+          vertexShader: /* glsl */ `
+            uniform float uProgress;
+            uniform float uSizeScale;
+            attribute vec3 aStart;
+            attribute vec3 aEnd;
+            attribute float aOffset;
+            varying float vMid;
+            void main() {
+              float t = clamp((uProgress - aOffset * 0.22) / 0.78, 0.0, 1.0);
+              float s = t * t * (3.0 - 2.0 * t);
+              vec3 p = mix(aStart, aEnd, s);
+              // Small arc in z so particles swoop rather than go straight
+              p.z += sin(s * 3.14159) * 0.6;
+              vMid = 1.0 - abs(s - 0.5) * 2.0;
+              vec4 mv = modelViewMatrix * vec4(p, 1.0);
+              gl_Position = projectionMatrix * mv;
+              float scl = length(vec3(modelMatrix[0].x, modelMatrix[1].y, modelMatrix[2].z));
+              gl_PointSize = uSizeScale * (2.8 + vMid * 2.2);
+            }
+          `,
+          fragmentShader: /* glsl */ `
+            precision highp float;
+            varying float vMid;
+            void main() {
+              vec2 c = gl_PointCoord - 0.5;
+              float d = length(c);
+              if (d > 0.5) discard;
+              float a = 1.0 - smoothstep(0.05, 0.5, d);
+              vec3 cool = vec3(0.82, 0.93, 1.0);
+              vec3 warm = vec3(1.0, 0.92, 0.55);
+              vec3 col = mix(cool, warm, vMid);
+              gl_FragColor = vec4(col, a * (0.55 + vMid * 0.45));
+            }
+          `,
+          transparent: true,
+          depthTest: false,
+        })
+        morphPoints = new Points(geom, morphMaterial)
+        morphPoints.visible = false
+        morphPoints.frustumCulled = false
+        scene.add(morphPoints)
+      } else {
+        const geom = morphPoints.geometry as BufferGeometry
+        geom.setAttribute('aStart', new BufferAttribute(rPts, 3))
+        geom.setAttribute('aEnd', new BufferAttribute(subPts, 3))
+      }
+    }
+
     // --- R measurement & keyframes ---
     let attempts = 0
     let rafId = 0
@@ -414,8 +642,10 @@ export default function HeroFish() {
 
       // Bubble emission only after water fully covers the screen.
       waterFullAtScroll = heroBottom - vh * 0.5 + 20
-      // Splash fires once, as the sub first dips into the rising wave.
-      splashAtScroll = heroTop + heroH * 0.18
+
+      // R → submarine morph window
+      morphStart = heroTop + heroH * 0.08
+      morphEnd = heroTop + heroH * 0.45
 
       keyframes = [
         { scroll: heroTop, x: 0, y: 0, rotation: 0, rotationY: 0, beam: 0, opacity: 0 },
@@ -483,70 +713,6 @@ export default function HeroFish() {
     let lastScreenX = rCenterX
     let lastScreenY = rCenterY
 
-    // Splash (water entry burst) — one-shot
-    let splashed = false
-    let splashAtScroll = Number.POSITIVE_INFINITY
-    const triggerSplash = (cx: number, cy: number) => {
-      if (!splashEl || splashed) return
-      splashed = true
-      gsap.killTweensOf(splashEl)
-      gsap.set(splashEl, {
-        left: cx,
-        top: cy,
-        xPercent: -50,
-        yPercent: -50,
-        scale: 0.2,
-        opacity: 0,
-        display: 'block',
-      })
-      const tl = gsap.timeline({
-        onComplete: () => {
-          if (splashEl) splashEl.style.display = 'none'
-        },
-      })
-      tl.to(splashEl, { opacity: 0.9, duration: 0.08, ease: 'power2.out' })
-        .to(
-          splashEl,
-          { scale: 2.4, duration: 0.9, ease: 'power2.out' },
-          0
-        )
-        .to(
-          splashEl,
-          { opacity: 0, duration: 0.55, ease: 'power1.in' },
-          '>-0.5'
-        )
-
-      // Burst a few extra bubbles around the entry point
-      for (let i = 0; i < 6; i++) {
-        const b = bubbleEls[bubbleIndex % bubbleEls.length]
-        bubbleIndex++
-        if (!b) break
-        const ang = Math.random() * Math.PI * 2
-        const dist = 20 + Math.random() * 40
-        const size = 6 + Math.random() * 8
-        gsap.killTweensOf(b)
-        gsap.set(b, {
-          left: cx,
-          top: cy,
-          width: size,
-          height: size,
-          xPercent: -50,
-          yPercent: -50,
-          scale: 1,
-          opacity: 0.85,
-          x: 0,
-          y: 0,
-        })
-        gsap.to(b, {
-          x: Math.cos(ang) * dist,
-          y: Math.sin(ang) * dist - 30,
-          scale: 0.3,
-          opacity: 0,
-          duration: 1.0 + Math.random() * 0.4,
-          ease: 'power2.out',
-        })
-      }
-    }
 
     const applyState = (scroll: number) => {
       const state = getStateAt(scroll)
@@ -568,15 +734,40 @@ export default function HeroFish() {
       subGroup.rotation.z = degToRad(state.rotation + wiggleR)
       subGroup.rotation.y = degToRad(state.rotationY)
       const subScale = (subBaseW * 0.85) / 4.2
-      const opacityScale = 0.85 + state.opacity * 0.15
+
+      // Morph progress: 0 = full R, 1 = full submarine
+      const morphSpan = morphEnd - morphStart
+      const morphProgress =
+        morphSpan > 0
+          ? Math.max(0, Math.min(1, (scroll - morphStart) / morphSpan))
+          : scroll >= morphEnd
+            ? 1
+            : 0
+      // Submarine mesh only fades in at the tail end of the morph
+      const subReveal =
+        morphProgress < 0.9
+          ? 0
+          : Math.min(1, (morphProgress - 0.9) / 0.1)
+      const effectiveOpacity = state.opacity * subReveal
+
+      const opacityScale = 0.85 + effectiveOpacity * 0.15
       subGroup.scale.setScalar(subScale * opacityScale)
 
       // Visibility + material opacity (all materials share this opacity)
-      subGroup.visible = state.opacity > 0.005
-      for (const m of subMaterials) m.opacity = state.opacity
+      subGroup.visible = effectiveOpacity > 0.005
+      for (const m of subMaterials) m.opacity = effectiveOpacity
 
       // Spin propeller continuously when visible
-      propellerGroup.rotation.x += state.opacity * 0.35
+      propellerGroup.rotation.x += effectiveOpacity * 0.35
+
+      // Morph particles — mirror sub transform and update progress
+      if (morphPoints && morphMaterial) {
+        morphPoints.position.copy(subGroup.position)
+        morphPoints.rotation.copy(subGroup.rotation)
+        morphPoints.scale.copy(subGroup.scale)
+        morphMaterial.uniforms.uProgress.value = morphProgress
+        morphPoints.visible = morphProgress > 0.002 && morphProgress < 0.999
+      }
 
       // Beam CSS overlay follows the sub
       if (beamEl) {
@@ -599,29 +790,27 @@ export default function HeroFish() {
         beamEl.style.transform = `translate(0, -50%) rotate(${state.rotation * flip}deg) scaleX(${flip * scaleX}) scaleY(${scaleY})`
       }
 
-      // Fade R letter and shrink during morph
+      // Fade R letter out as the morph begins
       const rEl = document.getElementById('hero-r-letter')
       if (rEl) {
-        rEl.style.opacity = String(1 - state.opacity)
-        rEl.style.transform = `scale(${1 - state.opacity * 0.25})`
+        const rFade = Math.max(0, Math.min(1, morphProgress / 0.1))
+        rEl.style.opacity = String(1 - rFade)
+        rEl.style.transform = `scale(${1 - rFade * 0.12})`
         rEl.style.display = 'inline-block'
         rEl.style.transformOrigin = 'center center'
       }
 
-      // One-shot splash as the sub first touches the wave
-      if (!splashed && scroll >= splashAtScroll && state.opacity > 0.4) {
-        triggerSplash(screenX, screenY)
-      }
-
       // Emit bubbles only once water is fully up
-      if (scroll > waterFullAtScroll && state.opacity > 0.6) {
+      if (scroll > waterFullAtScroll && effectiveOpacity > 0.6) {
         const scrollDelta = Math.abs(scroll - lastScrollForDelta)
         lastScrollForDelta = scroll
-        const enoughTime = tNow - lastBubbleTime > 0.18
-        const enoughMovement = Math.abs(scroll - lastBubbleScroll) > 4
-        if (enoughTime && (scrollDelta > 0.3 || enoughMovement)) {
+        const enoughTime = tNow - lastBubbleTime > 0.06
+        const enoughMovement = Math.abs(scroll - lastBubbleScroll) > 1.2
+        if (enoughTime && (scrollDelta > 0.1 || enoughMovement)) {
           const normY = ((state.rotationY % 360) + 360) % 360
           const facingLeft = normY > 90 && normY < 270
+          emitBubble(facingLeft)
+          emitBubble(facingLeft)
           emitBubble(facingLeft)
           lastBubbleTime = tNow
           lastBubbleScroll = scroll
@@ -647,6 +836,7 @@ export default function HeroFish() {
 
       buildKeyframes()
       applyState(window.scrollY)
+      void rebuildMorph()
 
       trigger = ScrollTrigger.create({
         trigger: document.body,
@@ -676,6 +866,7 @@ export default function HeroFish() {
           buildKeyframes()
           ScrollTrigger.refresh()
           applyState(window.scrollY)
+          void rebuildMorph()
         }
       }, 500)
 
@@ -698,6 +889,7 @@ export default function HeroFish() {
         buildKeyframes()
         ScrollTrigger.refresh()
         applyState(window.scrollY)
+        void rebuildMorph()
       }
       window.addEventListener('resize', resizeHandler)
     }
@@ -731,6 +923,10 @@ export default function HeroFish() {
           else if (mat) (mat as MeshStandardMaterial).dispose()
         }
       })
+      if (morphPoints) {
+        morphPoints.geometry.dispose()
+        ;(morphPoints.material as ShaderMaterial).dispose()
+      }
       renderer.dispose()
       if (canvasContainer.contains(renderer.domElement)) {
         canvasContainer.removeChild(renderer.domElement)
@@ -777,30 +973,6 @@ export default function HeroFish() {
           opacity: 0,
           zIndex: 3,
           willChange: 'opacity, transform, left, top',
-        }}
-        aria-hidden="true"
-      />
-
-      {/* Water-entry splash — one-shot on first dive */}
-      <div
-        ref={splashRef}
-        className="pointer-events-none"
-        style={{
-          position: 'fixed',
-          left: 0,
-          top: 0,
-          width: 220,
-          height: 220,
-          borderRadius: '50%',
-          background:
-            'radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(186,230,253,0.55) 35%, rgba(125,211,252,0.2) 60%, rgba(125,211,252,0) 80%)',
-          border: '2px solid rgba(224,242,254,0.7)',
-          boxShadow: '0 0 40px rgba(186,230,253,0.6)',
-          mixBlendMode: 'screen',
-          opacity: 0,
-          display: 'none',
-          zIndex: 4,
-          willChange: 'transform, opacity',
         }}
         aria-hidden="true"
       />

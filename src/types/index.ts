@@ -35,6 +35,8 @@ export type Education = {
   period: { start: string; end: string }
   summary: string
   tags: string[]
+  /** 'bubble' = 通常の時系列タイムラインから外して泡カードとして別枠で表示 */
+  kind?: 'timeline' | 'bubble'
 }
 
 export type Profile = {
