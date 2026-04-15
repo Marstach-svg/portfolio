@@ -88,8 +88,8 @@ export default function RyokenSubmarine() {
       window.matchMedia('(max-width: 768px)').matches
 
     // --- Three.js setup ---
-    const renderer = new WebGLRenderer({ alpha: true, antialias: true })
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+    const renderer = new WebGLRenderer({ alpha: true, antialias: false })
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5))
     renderer.setSize(window.innerWidth, window.innerHeight, false)
     canvasContainer.appendChild(renderer.domElement)
     renderer.domElement.style.cssText =
@@ -872,7 +872,7 @@ export default function RyokenSubmarine() {
         },
       })
 
-      gsap.ticker.add(tickerTick)
+      startTicker()
       ScrollTrigger.refresh()
 
       settleId = window.setTimeout(() => {
@@ -925,12 +925,33 @@ export default function RyokenSubmarine() {
       applyState(window.scrollY)
     }
 
+    let tickerRunning = false
+    const startTicker = () => {
+      if (tickerRunning) return
+      gsap.ticker.add(tickerTick)
+      tickerRunning = true
+    }
+    const stopTicker = () => {
+      if (!tickerRunning) return
+      gsap.ticker.remove(tickerTick)
+      tickerRunning = false
+    }
+    const onVis = () => {
+      if (document.hidden) stopTicker()
+      else {
+        startTicker()
+        applyState(window.scrollY)
+      }
+    }
+    document.addEventListener('visibilitychange', onVis)
+
     setup()
 
     return () => {
       cancelAnimationFrame(rafId)
       trigger?.kill()
-      gsap.ticker.remove(tickerTick)
+      stopTicker()
+      document.removeEventListener('visibilitychange', onVis)
       if (settleId !== null) window.clearTimeout(settleId)
       if (resizeHandler) window.removeEventListener('resize', resizeHandler)
 

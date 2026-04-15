@@ -178,6 +178,7 @@ export class BubbleSystem3D {
   }
 
   update(dt: number, t: number) {
+    if (!this.mesh.visible) return
     const h = this.fieldH
     for (let i = 0; i < this.states.length; i++) {
       const s = this.states[i]

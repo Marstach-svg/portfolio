@@ -109,6 +109,7 @@ export class MoteParticles {
   }
 
   update(dt: number, t: number) {
+    if (!this.points.visible) return
     this.mat.uniforms.uTime.value = t
     const pos = this.positions
     const vel = this.velocities

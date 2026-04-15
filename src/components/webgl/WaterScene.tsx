@@ -71,8 +71,7 @@ const waterFragment = /* glsl */ `
     // --- Caustics (bright cyan light patterns) ---
     float c1 = sin(uv.x * 14.0 + uTime * 0.7) * sin(uv.y * 11.0 - uTime * 0.5);
     float c2 = sin(uv.x * 9.0 - uTime * 1.0) * sin(uv.y * 15.0 + uTime * 0.6);
-    float c3 = sin(uv.x * 18.0 + uTime * 0.4) * sin(uv.y * 13.0 - uTime * 0.8);
-    float caustics = (c1 + c2 + c3) / 3.0;
+    float caustics = (c1 + c2) / 2.0;
     caustics = caustics * 0.5 + 0.5;
     caustics = pow(caustics, 5.0);
 
@@ -81,7 +80,7 @@ const waterFragment = /* glsl */ `
 
     // --- Volumetric god rays from above (12 procedural shafts) ---
     float rayAccum = 0.0;
-    for (int i = 0; i < 12; i++) {
+    for (int i = 0; i < 6; i++) {
       float fi = float(i);
       float seed = fract(sin(fi * 12.9898) * 43758.5453);
       float seed2 = fract(sin(fi * 78.233 + 4.0) * 43758.5453);
@@ -94,7 +93,7 @@ const waterFragment = /* glsl */ `
       r = pow(r, 1.6);
       rayAccum += r * (0.35 + seed * 0.7);
     }
-    rayAccum *= 0.18;
+    rayAccum *= 0.36;
     rayAccum = pow(rayAccum, 1.25);
     float rayFade = smoothstep(0.85, 0.0, depth);
     float ySoft = smoothstep(1.0, 0.15, uv.y);
@@ -139,7 +138,7 @@ export default function WaterScene({ triggerId, className }: Props) {
     if (!container) return
 
     const renderer = new WebGLRenderer({ alpha: true, antialias: false })
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5))
     container.appendChild(renderer.domElement)
     renderer.domElement.style.cssText =
       'position:absolute;inset:0;width:100%;height:100%;'
@@ -170,13 +169,58 @@ export default function WaterScene({ triggerId, className }: Props) {
     resize()
     window.addEventListener('resize', resize)
 
-    let rafId: number
-    const animate = (t: number) => {
-      rafId = requestAnimationFrame(animate)
+    let rafId = 0
+    let running = false
+    let dirty = true
+    let inView = true
+    let docVisible = !document.hidden
+
+    const renderOnce = (t: number) => {
       if (!prefersReduced) material.uniforms.uTime.value = t * 0.001
       renderer.render(scene, camera)
+      dirty = false
     }
-    rafId = requestAnimationFrame(animate)
+
+    const animate = (t: number) => {
+      const p = material.uniforms.uProgress.value as number
+      const needsAnim = !prefersReduced && p > 0 && p < 1
+      if (needsAnim || dirty) renderOnce(t)
+      rafId = requestAnimationFrame(animate)
+    }
+
+    const start = () => {
+      if (running) return
+      running = true
+      dirty = true
+      rafId = requestAnimationFrame(animate)
+    }
+    const stop = () => {
+      if (!running) return
+      running = false
+      cancelAnimationFrame(rafId)
+    }
+
+    const sync = () => {
+      if (inView && docVisible) start()
+      else stop()
+    }
+
+    const io = new IntersectionObserver(
+      (entries) => {
+        inView = entries[0]?.isIntersecting ?? true
+        sync()
+      },
+      { rootMargin: '100px' }
+    )
+    io.observe(container)
+
+    const onVis = () => {
+      docVisible = !document.hidden
+      sync()
+    }
+    document.addEventListener('visibilitychange', onVis)
+
+    sync()
 
     let trigger: ScrollTrigger | undefined
     if (!prefersReduced) {
@@ -187,12 +231,15 @@ export default function WaterScene({ triggerId, className }: Props) {
         scrub: 0.8,
         onUpdate: (self) => {
           material.uniforms.uProgress.value = self.progress
+          dirty = true
         },
       })
     }
 
     return () => {
-      cancelAnimationFrame(rafId)
+      stop()
+      io.disconnect()
+      document.removeEventListener('visibilitychange', onVis)
       trigger?.kill()
       window.removeEventListener('resize', resize)
       geometry.dispose()

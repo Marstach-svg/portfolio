@@ -148,6 +148,7 @@ export class FishShadowSwarm {
   }
 
   update(t: number) {
+    if (!this.mesh.visible) return
     for (let i = 0; i < this.fish.length; i++) {
       const f = this.fish[i]
       const sc = this.schools[f.schoolIdx]

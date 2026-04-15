@@ -63,7 +63,7 @@ export default function ParticleField({ className }: { className?: string }) {
     if (!container) return
 
     const renderer = new WebGLRenderer({ alpha: true, antialias: false })
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5))
     container.appendChild(renderer.domElement)
     renderer.domElement.style.cssText =
       'position:absolute;inset:0;width:100%;height:100%;'
@@ -119,20 +119,63 @@ export default function ParticleField({ className }: { className?: string }) {
     window.addEventListener('resize', resize)
 
     let rafId: number | null = null
+    let running = false
+    let inView = true
+    let docVisible = !document.hidden
+
+    const animate = (t: number) => {
+      rafId = requestAnimationFrame(animate)
+      material.uniforms.uTime.value = t * 0.001
+      material.uniforms.uMouse.value = [mouse.x, mouse.y]
+      renderer.render(scene, camera)
+    }
+
+    const start = () => {
+      if (running || prefersReduced) return
+      running = true
+      rafId = requestAnimationFrame(animate)
+    }
+    const stop = () => {
+      if (!running) return
+      running = false
+      if (rafId !== null) cancelAnimationFrame(rafId)
+      rafId = null
+    }
+    const sync = () => {
+      if (inView && docVisible) start()
+      else stop()
+    }
+
     if (prefersReduced) {
       renderer.render(scene, camera)
     } else {
-      const animate = (t: number) => {
-        rafId = requestAnimationFrame(animate)
-        material.uniforms.uTime.value = t * 0.001
-        material.uniforms.uMouse.value = [mouse.x, mouse.y]
-        renderer.render(scene, camera)
+      const io = new IntersectionObserver(
+        (entries) => {
+          inView = entries[0]?.isIntersecting ?? true
+          sync()
+        },
+        { rootMargin: '100px' }
+      )
+      io.observe(container)
+      const onVis = () => {
+        docVisible = !document.hidden
+        sync()
       }
-      rafId = requestAnimationFrame(animate)
+      document.addEventListener('visibilitychange', onVis)
+      sync()
+
+      // Stash disposers for cleanup
+      ;(container as HTMLDivElement & { __pfDispose?: () => void }).__pfDispose = () => {
+        io.disconnect()
+        document.removeEventListener('visibilitychange', onVis)
+      }
     }
 
     return () => {
-      if (rafId !== null) cancelAnimationFrame(rafId)
+      stop()
+      const c = container as HTMLDivElement & { __pfDispose?: () => void }
+      c.__pfDispose?.()
+      delete c.__pfDispose
       window.removeEventListener('resize', resize)
       window.removeEventListener('mousemove', onMove)
       geometry.dispose()
