@@ -204,7 +204,7 @@ export default function About() {
           {/* Intro text */}
           <div className="space-y-6">
             <p className="text-sm font-space uppercase tracking-[0.25em] text-sky-300/60">
-              {profile.nameEn} — {profile.title}
+              {profile.title}
             </p>
             <h3 className="text-2xl md:text-3xl font-syne font-bold text-sky-100">
               {profile.name}

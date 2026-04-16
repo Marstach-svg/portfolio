@@ -4,10 +4,13 @@ import Projects from '@/components/sections/Projects'
 import Contact from '@/components/sections/Contact'
 import WaterBackground from '@/components/webgl/WaterBackground'
 import RyokenSubmarine from '@/components/ui/RyokenSubmarine'
+import ScrollTriggerRefresher from '@/components/ui/ScrollTriggerRefresher'
 
 export default function Home() {
   return (
     <>
+      <ScrollTriggerRefresher />
+
       {/* Fixed full-viewport water canvas — behind content, above page bg */}
       <WaterBackground />
 

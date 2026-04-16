@@ -26,7 +26,10 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="ja" className={`${syne.variable} ${space.variable} ${inter.variable} ${notoSansJP.variable}`}>
+    <html
+      lang="ja"
+      className={`${syne.variable} ${space.variable} ${inter.variable} ${notoSansJP.variable}`}
+    >
       <body className="min-h-screen">
         <SmoothScrollProvider>
           <CustomCursor />

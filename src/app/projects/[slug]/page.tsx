@@ -2,6 +2,9 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { projects } from '@/data/projects'
+import ReloadOnPop from '@/components/ui/ReloadOnPop'
+import BeachDecorations from '@/components/ui/BeachDecorations'
+import BackButton from '@/components/ui/BackButton'
 
 type Props = { params: Promise<{ slug: string }> }
 
@@ -31,19 +34,26 @@ export default async function ProjectDetailPage({ params }: Props) {
   ]
 
   return (
-    <div className="min-h-screen px-6 pt-28 pb-20">
-      <div className="mx-auto max-w-3xl">
-        {/* Back */}
-        <Link
-          href="/"
-          className="mb-8 inline-flex items-center gap-2 text-sm font-space text-muted hover:text-text transition-colors"
-          data-cursor="hover"
-        >
-          <span aria-hidden="true">&larr;</span> Back
-        </Link>
+    <div className="relative min-h-screen overflow-hidden bg-gradient-to-b from-[#f5ebd6] via-[#f0e2c4] to-[#e8d4a8] px-6 pt-28 pb-20">
+      <ReloadOnPop />
+      {/* Subtle sand grain via radial speckle */}
+      <div
+        className="pointer-events-none absolute inset-0 z-0 opacity-[0.35] mix-blend-multiply"
+        style={{
+          backgroundImage:
+            'radial-gradient(rgba(140, 100, 60, 0.18) 1px, transparent 1px), radial-gradient(rgba(160, 120, 80, 0.12) 1px, transparent 1px)',
+          backgroundSize: '24px 24px, 13px 13px',
+          backgroundPosition: '0 0, 7px 11px',
+        }}
+        aria-hidden="true"
+      />
+      <BeachDecorations />
+      <div className="relative z-10 mx-auto max-w-3xl">
+        {/* Back — plays a reverse wave animation then hard-navigates home. */}
+        <BackButton />
 
         {/* Hero image */}
-        <div className="relative mb-10 aspect-video overflow-hidden rounded-lg bg-surface">
+        <div className="relative mb-10 aspect-video overflow-hidden rounded-xl bg-surface shadow-[0_24px_48px_-20px_rgba(120,80,40,0.45)]">
           <img
             src={project.thumbnail}
             alt={project.title}

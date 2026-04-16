@@ -1,7 +1,8 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import Link from 'next/link'
+import ForwardLink from '@/components/ui/ForwardLink'
+import { useEffect, useRef, useState } from 'react'
 import type { Project } from '@/types'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
 
@@ -13,10 +14,36 @@ const ImagePlane = dynamic(() => import('@/components/webgl/ImagePlane'), {
 interface Props {
   project: Project
   underwater?: boolean
+  /** When false, skip the WebGL ImagePlane and render a plain <img>. */
+  useWebgl?: boolean
 }
 
-export default function ProjectCard({ project, underwater = false }: Props) {
+export default function ProjectCard({ project, underwater = false, useWebgl = true }: Props) {
   const isDesktop = useMediaQuery('(min-width: 768px)')
+  const thumbRef = useRef<HTMLDivElement>(null)
+  // Lazy: only mount the heavy WebGL ImagePlane once the card is near the
+  // viewport. Once mounted, keep it mounted (no churn on scroll).
+  const [isNear, setIsNear] = useState(false)
+
+  useEffect(() => {
+    if (!useWebgl || !isDesktop) return
+    if (isNear) return
+    const el = thumbRef.current
+    if (!el) return
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setIsNear(true)
+          io.disconnect()
+        }
+      },
+      { rootMargin: '400px' }
+    )
+    io.observe(el)
+    return () => io.disconnect()
+  }, [useWebgl, isDesktop, isNear])
+
+  const showWebgl = isDesktop && useWebgl && isNear
 
   const cardStyles = underwater
     ? {
@@ -35,30 +62,32 @@ export default function ProjectCard({ project, underwater = false }: Props) {
       }
 
   return (
-    <Link
+    <ForwardLink
       href={`/projects/${project.slug}/`}
       className="group block"
       data-cursor="hover"
     >
       <article className="space-y-4">
         {/* Thumbnail */}
-        {isDesktop ? (
-          <ImagePlane
-            src={project.thumbnail}
-            alt={project.title}
-            className="aspect-[16/9] w-full overflow-hidden rounded-lg"
-          />
-        ) : (
-          <div className={`aspect-[16/9] w-full overflow-hidden rounded-lg ${cardStyles.thumb}`}>
-            <img
+        <div ref={thumbRef} className="w-full">
+          {showWebgl ? (
+            <ImagePlane
               src={project.thumbnail}
               alt={project.title}
-              className="w-full h-full object-cover"
-              loading="lazy"
-              decoding="async"
+              className="aspect-[16/9] w-full overflow-hidden rounded-lg"
             />
-          </div>
-        )}
+          ) : (
+            <div className={`aspect-[16/9] w-full overflow-hidden rounded-lg ${cardStyles.thumb}`}>
+              <img
+                src={project.thumbnail}
+                alt={project.title}
+                className="w-full h-full object-cover"
+                loading="lazy"
+                decoding="async"
+              />
+            </div>
+          )}
+        </div>
 
         {/* Info */}
         <div className="space-y-2">
@@ -86,6 +115,6 @@ export default function ProjectCard({ project, underwater = false }: Props) {
           </div>
         </div>
       </article>
-    </Link>
+    </ForwardLink>
   )
 }

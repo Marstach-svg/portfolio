@@ -41,7 +41,6 @@ export type Education = {
 
 export type Profile = {
   name: string
-  nameEn: string
   title: string
   introduction: string[]
   email: string

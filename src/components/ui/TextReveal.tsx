@@ -19,7 +19,7 @@ interface Props {
 // Color pairs: [initial, target]
 const COLORS = {
   default: { initial: '#78716C', target: '#1C1917' },
-  underwater: { initial: '#4a6a8a', target: '#e0ecf5' },
+  underwater: { initial: '#6a88a8', target: '#ffffff' },
 }
 
 export default function TextReveal({
@@ -93,6 +93,10 @@ export default function TextReveal({
     }
   }, [children, stagger, scrub, prefersReduced, underwater])
 
+  const composed = underwater
+    ? `${className} underwater-text`.trim()
+    : className
+
   // @ts-expect-error — dynamic tag
-  return <Tag ref={containerRef} className={className}>{children}</Tag>
+  return <Tag ref={containerRef} className={composed}>{children}</Tag>
 }

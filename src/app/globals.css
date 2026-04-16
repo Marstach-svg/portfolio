@@ -56,6 +56,21 @@ body {
   scroll-snap-align: start;
 }
 
+/* Legibility on the underwater home page: TextReveal headings (Projects,
+   About, etc.) sit over a dark gradient + animated water canvas and can
+   get lost. A stronger warm-white glow + drop shadow lifts them off the
+   background. */
+.underwater-text {
+  color: #ffffff !important;
+  text-shadow:
+    0 0 32px rgba(255, 255, 255, 0.55),
+    0 0 14px rgba(200, 230, 255, 0.7),
+    0 3px 10px rgba(3, 16, 38, 0.85);
+}
+.underwater-text > span {
+  color: #ffffff !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;

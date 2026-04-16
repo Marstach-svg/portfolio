@@ -32,7 +32,6 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { useReducedMotion } from '@/hooks/useReducedMotion'
 import { BubbleSystem3D } from '@/components/webgl/BubbleSystem3D'
 import { FishShadowSwarm } from '@/components/webgl/FishShadowSwarm'
-import { MoteParticles } from '@/components/webgl/MoteParticles'
 
 gsap.registerPlugin(ScrollTrigger)
 
@@ -341,19 +340,9 @@ export default function RyokenSubmarine() {
       fogNear: FOG_NEAR,
       fogFar: FOG_FAR,
     })
-    const motes = new MoteParticles(scene, {
-      mobile: isMobile,
-      fieldW: window.innerWidth,
-      fieldH: window.innerHeight,
-      fogColor: FOG_COLOR_RGB,
-      fogNear: FOG_NEAR,
-      fogFar: FOG_FAR,
-    })
-
     // Effects start hidden; revealed once water has filled the screen.
     bubbleSystem.mesh.visible = false
     fishSwarm.mesh.visible = false
-    motes.points.visible = false
 
     // dt clock for system updates
     let lastTime = performance.now() * 0.001
@@ -816,7 +805,6 @@ export default function RyokenSubmarine() {
       const waterFilled = scroll > waterFullAtScroll
       bubbleSystem.mesh.visible = waterFilled
       fishSwarm.mesh.visible = waterFilled
-      motes.points.visible = waterFilled
 
       // Emit bubbles only once water is fully up
       if (waterFilled && effectiveOpacity > 0.6) {
@@ -838,7 +826,6 @@ export default function RyokenSubmarine() {
       if (waterFilled) {
         bubbleSystem.update(dt, tNow)
         fishSwarm.update(tNow)
-        motes.update(dt, tNow)
       }
 
       renderer.render(scene, camera)
@@ -903,7 +890,6 @@ export default function RyokenSubmarine() {
         camera.updateProjectionMatrix()
         bubbleSystem.resize(window.innerWidth, window.innerHeight)
         fishSwarm.resize(window.innerWidth, window.innerHeight)
-        motes.resize(window.innerWidth, window.innerHeight)
 
         const el = document.getElementById('hero-r-letter')
         if (!el) return
@@ -964,7 +950,6 @@ export default function RyokenSubmarine() {
       // Dispose 3D effect systems first (they own their geometry+material)
       bubbleSystem.dispose()
       fishSwarm.dispose()
-      motes.dispose()
 
       // Dispose remaining Three.js resources
       scene.traverse((obj) => {

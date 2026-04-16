@@ -18,15 +18,19 @@ export default function SmoothScrollProvider({ children }: { children: React.Rea
       infinite: false,
     })
     lenisRef.current = lenis
+    // Expose on window so route-change handlers (PageTransition) can
+    // reset scroll position immediately on navigation.
+    ;(window as unknown as { __lenis?: Lenis }).__lenis = lenis
 
     lenis.on('scroll', ScrollTrigger.update)
-    gsap.ticker.add((time) => {
-      lenis.raf(time * 1000)
-    })
+    const raf = (time: number) => lenis.raf(time * 1000)
+    gsap.ticker.add(raf)
     gsap.ticker.lagSmoothing(0)
 
     return () => {
+      gsap.ticker.remove(raf)
       lenis.destroy()
+      delete (window as unknown as { __lenis?: Lenis }).__lenis
     }
   }, [])
 

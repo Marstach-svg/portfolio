@@ -1,8 +1,7 @@
 import type { Profile } from '@/types'
 
 export const profile: Profile = {
-  name: '山田 太郎',
-  nameEn: 'Taro Yamada',
+  name: 'Ryoken',
   title: 'Software Engineer',
   introduction: [
     'Webフロントエンドを中心に、ユーザー体験を大切にしたプロダクト開発に取り組んでいます。React / Next.js を使った開発が得意で、パフォーマンスとアクセシビリティの両立を意識しています。',
@@ -11,7 +10,7 @@ export const profile: Profile = {
   email: 'ryoken.102388@gmail.com',
   photo: '/images/profile/me.svg',
   social: [
-    { label: 'GitHub', href: 'https://github.com' },
+    { label: 'GitHub', href: 'https://github.com/Marstach-svg' },
     { label: 'X', href: 'https://x.com' },
     { label: 'LinkedIn', href: 'https://linkedin.com' },
     { label: 'Zenn', href: 'https://zenn.dev' },

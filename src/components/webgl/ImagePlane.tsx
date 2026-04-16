@@ -36,12 +36,12 @@ const fragment = /* glsl */ `
     vec2 uv = vUv;
 
     float dist = distance(uv, uMouse);
-    float strength = uHover * 0.03 * smoothstep(0.5, 0.0, dist);
+    float strength = uHover * 0.012 * smoothstep(0.5, 0.0, dist);
 
     uv.x += sin(uv.y * 15.0 + uTime * 2.0) * strength;
     uv.y += cos(uv.x * 15.0 + uTime * 2.0) * strength;
 
-    float aberration = uHover * 0.008;
+    float aberration = uHover * 0.003;
     float r = texture2D(uTexture, uv + vec2(aberration, 0.0)).r;
     float g = texture2D(uTexture, uv).g;
     float b = texture2D(uTexture, uv - vec2(aberration, 0.0)).b;
@@ -106,7 +106,7 @@ export default function ImagePlane({ src, alt, className }: Props) {
     const mesh = new Mesh(geometry, material)
     scene.add(mesh)
 
-    let rafId: number
+    let rafId: number | null = null
     const animate = (t: number) => {
       rafId = requestAnimationFrame(animate)
       material.uniforms.uTime.value = t * 0.001
@@ -114,6 +114,15 @@ export default function ImagePlane({ src, alt, className }: Props) {
         (hoverRef.current - material.uniforms.uHover.value) * 0.05
       material.uniforms.uMouse.value = [mouseRef.current.x, mouseRef.current.y]
       renderer.render(scene, camera)
+    }
+    const start = () => {
+      if (rafId == null) rafId = requestAnimationFrame(animate)
+    }
+    const stop = () => {
+      if (rafId != null) {
+        cancelAnimationFrame(rafId)
+        rafId = null
+      }
     }
 
     const resize = () => {
@@ -139,10 +148,33 @@ export default function ImagePlane({ src, alt, className }: Props) {
     container.addEventListener('mouseleave', onLeave)
     container.addEventListener('mousemove', onMove)
 
-    rafId = requestAnimationFrame(animate)
+    // Pause the render loop when the card is fully offscreen.
+    let inView = true
+    let docVisible = !document.hidden
+    const sync = () => {
+      if (inView && docVisible) start()
+      else stop()
+    }
+    const io = new IntersectionObserver(
+      (entries) => {
+        inView = entries[0]?.isIntersecting ?? true
+        sync()
+      },
+      { rootMargin: '100px' }
+    )
+    io.observe(container)
+    const onVis = () => {
+      docVisible = !document.hidden
+      sync()
+    }
+    document.addEventListener('visibilitychange', onVis)
+
+    sync()
 
     return () => {
-      cancelAnimationFrame(rafId)
+      stop()
+      io.disconnect()
+      document.removeEventListener('visibilitychange', onVis)
       window.removeEventListener('resize', resize)
       container.removeEventListener('mouseenter', onEnter)
       container.removeEventListener('mouseleave', onLeave)
