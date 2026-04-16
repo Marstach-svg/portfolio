@@ -186,7 +186,7 @@ export default function About() {
               }}
             >
               <img
-                src={profile.photo ?? '/images/profile/me.svg'}
+                src={profile.photo ?? '/images/profile/icon_SANDBOX.png'}
                 alt={profile.name}
                 className="w-full h-full object-cover"
               />

@@ -26,6 +26,9 @@ const COVER_MS = 520
 const HOLD_MS = 160
 const REVEAL_MS = 900
 
+// Scroll position saved when navigating forward, restored on reverse.
+const SCROLL_KEY = 'pt-scroll-y'
+
 // Cover animation keyframes (fade from 0 to fully covered).
 const COVER_FRAMES: Keyframe[] = [
   { opacity: 0, transform: 'translateY(0)' },
@@ -85,9 +88,17 @@ export default function PageTransition({ children }: Props) {
     overlay.style.transform = 'translateY(0)'
   }
 
+  // Disable browser scroll restoration so it doesn't fight our custom logic.
+  useEffect(() => {
+    if ('scrollRestoration' in history) {
+      history.scrollRestoration = 'manual'
+    }
+  }, [])
+
   // --- cover events (from ForwardLink / BackButton) -------------------
   useEffect(() => {
     const forwardHandler = () => {
+      try { sessionStorage.setItem(SCROLL_KEY, String(window.scrollY)) } catch {}
       setDirection('forward')
       directionRef.current = 'forward'
       playAnim(COVER_FRAMES, COVER_MS, 'ease-out')
@@ -112,16 +123,22 @@ export default function PageTransition({ children }: Props) {
     if (isFirstRender.current) return
     const lenis = (window as unknown as { __lenis?: LenisLike }).__lenis
     if (directionRef.current === 'reverse') {
-      // Scroll to the Projects section BEFORE paint so the first painted
-      // frame of the new page is already showing the right position
-      // (covered by the overlay, so the user won't see the scroll change).
-      const el = document.getElementById('projects')
-      if (el) {
-        const top = el.getBoundingClientRect().top + window.scrollY
-        if (lenis?.stop) lenis.stop()
-        window.scrollTo(0, top)
-        if (lenis) lenis.scrollTo(top, { immediate: true, force: true })
+      // Restore the scroll position that was saved when the user navigated
+      // forward. This is more reliable than recalculating from DOM positions
+      // which can be unstable during remount.
+      let top = 0
+      try {
+        const saved = sessionStorage.getItem(SCROLL_KEY)
+        if (saved) top = Number(saved)
+      } catch {}
+      // Fallback: calculate from the Projects section if no saved position.
+      if (!top) {
+        const el = document.getElementById('projects')
+        if (el) top = el.getBoundingClientRect().top + window.scrollY
       }
+      if (lenis?.stop) lenis.stop()
+      window.scrollTo(0, top)
+      if (lenis) lenis.scrollTo(top, { immediate: true, force: true })
       return
     }
     if (lenis) {
@@ -182,24 +199,40 @@ export default function PageTransition({ children }: Props) {
 
       ScrollTrigger.refresh()
 
-      // Re-assert the scroll position in case tween kills triggered reflow.
-      // Retry a few times across the next frames because Lenis may animate
-      // back to a stale target otherwise.
-      const scrollToProjects = () => {
-        const el = document.getElementById('projects')
-        if (!el) return
-        const top = el.getBoundingClientRect().top + window.scrollY
+      // Re-assert the scroll position from the saved value.
+      // Retry a few times because Lenis may drift after restart.
+      let savedTop = 0
+      try {
+        const saved = sessionStorage.getItem(SCROLL_KEY)
+        if (saved) savedTop = Number(saved)
+      } catch {}
+      const scrollToSaved = () => {
+        // Use saved position; fallback to #projects DOM position.
+        let top = savedTop
+        if (!top) {
+          const el = document.getElementById('projects')
+          if (el) top = el.getBoundingClientRect().top + window.scrollY
+        }
+        if (!top) return
         window.scrollTo(0, top)
         if (lenis) lenis.scrollTo(top, { immediate: true, force: true })
       }
-      scrollToProjects()
-      requestAnimationFrame(scrollToProjects)
-      window.setTimeout(scrollToProjects, 80)
-      window.setTimeout(scrollToProjects, 200)
+      scrollToSaved()
+      requestAnimationFrame(scrollToSaved)
+      window.setTimeout(scrollToSaved, 80)
+      window.setTimeout(scrollToSaved, 200)
       window.setTimeout(() => {
+        scrollToSaved()
         if (lenis?.start) lenis.start()
+        // Re-assert immediately after Lenis restarts so its internal
+        // target matches the actual scroll position.
+        scrollToSaved()
         ScrollTrigger.refresh()
       }, 300)
+      // Extra assertions during the reveal animation window to catch
+      // any late reflows or Lenis drift after restart.
+      window.setTimeout(scrollToSaved, 500)
+      window.setTimeout(scrollToSaved, 800)
     } else {
       requestAnimationFrame(() => {
         ScrollTrigger.refresh()

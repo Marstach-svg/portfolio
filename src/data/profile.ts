@@ -8,7 +8,7 @@ export const profile: Profile = {
     'チーム開発ではコードレビューや技術選定にも積極的に関わり、開発プロセスの改善にも興味があります。',
   ],
   email: 'ryoken.102388@gmail.com',
-  photo: '/images/profile/me.svg',
+  photo: '/images/profile/icon_SANDBOX.png',
   social: [
     { label: 'GitHub', href: 'https://github.com/Marstach-svg' },
     { label: 'X', href: 'https://x.com' },

@@ -31,7 +31,7 @@ export default function ForwardLink({
     e.preventDefault()
     window.dispatchEvent(new CustomEvent('pt-cover-forward'))
     window.setTimeout(() => {
-      router.push(href)
+      router.push(href, { scroll: false })
     }, COVER_MS - 40)
   }
 

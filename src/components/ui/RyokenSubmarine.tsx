@@ -831,6 +831,18 @@ export default function RyokenSubmarine() {
       renderer.render(scene, camera)
     }
 
+    // Adjust a DOMRect so that centerY reflects the viewport position at
+    // scroll=0 rather than the current viewport-relative position.  When the
+    // page is scrolled down (e.g. after back-navigation to Projects) the R
+    // letter sits far above the viewport, producing a huge negative top value
+    // that throws off every keyframe.  Adding scrollY converts to the
+    // document-absolute Y which equals the viewport Y at scroll=0.
+    const scrollAdjustedRect = (r: DOMRect): DOMRect => {
+      const scrollY = window.scrollY
+      if (scrollY < 1) return r
+      return new DOMRect(r.x, r.y + scrollY, r.width, r.height)
+    }
+
     const setup = () => {
       const rEl = document.getElementById('hero-r-letter')
       if (!rEl || rEl.getBoundingClientRect().width < 5) {
@@ -840,7 +852,7 @@ export default function RyokenSubmarine() {
         return
       }
 
-      const rect = rEl.getBoundingClientRect()
+      const rect = scrollAdjustedRect(rEl.getBoundingClientRect())
       const placed = placeAt(rect)
       rCenterX = placed.centerX
       rCenterY = placed.centerY
@@ -863,10 +875,9 @@ export default function RyokenSubmarine() {
       ScrollTrigger.refresh()
 
       settleId = window.setTimeout(() => {
-        if (window.scrollY > window.innerHeight * 0.1) return
         const el = document.getElementById('hero-r-letter')
         if (!el) return
-        const newRect = el.getBoundingClientRect()
+        const newRect = scrollAdjustedRect(el.getBoundingClientRect())
         if (
           Math.abs(newRect.left - rect.left) > 1 ||
           Math.abs(newRect.top - rect.top) > 1
@@ -893,12 +904,10 @@ export default function RyokenSubmarine() {
 
         const el = document.getElementById('hero-r-letter')
         if (!el) return
-        const newRect = el.getBoundingClientRect()
-        if (window.scrollY < window.innerHeight * 0.1) {
-          const p2 = placeAt(newRect)
-          rCenterX = p2.centerX
-          rCenterY = p2.centerY
-        }
+        const newRect = scrollAdjustedRect(el.getBoundingClientRect())
+        const p2 = placeAt(newRect)
+        rCenterX = p2.centerX
+        rCenterY = p2.centerY
         buildKeyframes()
         ScrollTrigger.refresh()
         applyState(window.scrollY)

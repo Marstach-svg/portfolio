@@ -22,7 +22,7 @@ export default function BackButton() {
     e.preventDefault()
     window.dispatchEvent(new CustomEvent('pt-cover-reverse'))
     window.setTimeout(() => {
-      router.push('/')
+      router.push('/', { scroll: false })
     }, COVER_MS - 40)
   }
 
