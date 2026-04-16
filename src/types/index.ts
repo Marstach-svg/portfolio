@@ -17,6 +17,9 @@ export type Skill = {
   category: 'Frontend' | 'Backend' | 'Infrastructure' | 'Tools'
   proficiency: string
   size: 'small' | 'medium' | 'large'
+  icon?: string
+  /** 'bubble' = 通常グリッドから外して泡カードとして別枠表示 */
+  kind?: 'normal' | 'bubble'
 }
 
 export type Experience = {

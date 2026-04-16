@@ -56,23 +56,27 @@ export default function About() {
       }
     }
 
-    // Skills — pop in with rotation
+    // Skills — pop in
     if (skillsRef.current) {
       const tags = skillsRef.current.querySelectorAll('.skill-tag')
-      const anim = gsap.from(tags, {
-        y: 30,
-        opacity: 0,
-        rotation: -4,
-        scale: 0.85,
-        stagger: 0.04,
-        duration: 0.7,
-        ease: 'back.out(2)',
-        scrollTrigger: {
-          trigger: skillsRef.current,
-          start: 'top 80%',
-          toggleActions: 'play none none reverse',
+      const anim = gsap.fromTo(
+        tags,
+        { y: 30, opacity: 0, scale: 0.85 },
+        {
+          y: 0,
+          opacity: 1,
+          scale: 1,
+          stagger: 0.04,
+          duration: 0.7,
+          ease: 'back.out(2)',
+          immediateRender: false,
+          scrollTrigger: {
+            trigger: skillsRef.current,
+            start: 'top 80%',
+            toggleActions: 'play none none reverse',
+          },
         },
-      })
+      )
       if (anim.scrollTrigger) triggers.push(anim.scrollTrigger)
     }
 
@@ -229,35 +233,79 @@ export default function About() {
           <h3 className="text-sm font-space uppercase tracking-[0.2em] text-sky-300/60 mb-8">
             Skills
           </h3>
-          <div className="space-y-6">
-            {categories.map((cat) => (
-              <div key={cat}>
-                <p className="text-xs font-space uppercase tracking-wider text-sky-300/40 mb-3">
-                  {cat}
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {skills
-                    .filter((s) => s.category === cat)
-                    .map((skill) => (
-                      <span
+          <div className="space-y-10">
+            {categories.map((cat) => {
+              const normal = skills.filter((s) => s.category === cat && s.kind !== 'bubble')
+              const bubbles = skills.filter((s) => s.category === cat && s.kind === 'bubble')
+              return (
+                <div key={cat}>
+                  <p className="text-xs font-space uppercase tracking-wider text-sky-300/40 mb-5">
+                    {cat}
+                  </p>
+                  <div className="flex flex-wrap items-start gap-x-8 gap-y-8">
+                    {/* 通常スキル */}
+                    {normal.map((skill) => (
+                      <div
                         key={skill.name}
-                        className={`skill-tag inline-block rounded-full border px-4 py-1.5 text-sm font-space transition-transform hover:scale-110 ${
-                          skill.size === 'large'
-                            ? 'bg-sky-200/15 border-sky-300/30 text-sky-100 font-medium'
-                            : skill.size === 'medium'
-                              ? 'bg-sky-200/8 border-sky-300/20 text-sky-200/80'
-                              : 'border-sky-300/15 text-sky-300/50'
-                        }`}
+                        className="skill-tag flex flex-col items-center w-14 transition-transform hover:scale-110"
                       >
-                        {skill.name}
-                        <span className="ml-1.5 text-xs opacity-50">
-                          {skill.proficiency}
+                        <div className="flex h-14 w-14 items-center justify-center shrink-0">
+                          {skill.icon ? (
+                            <img
+                              src={skill.icon}
+                              alt={skill.name}
+                              width={48}
+                              height={48}
+                              className="object-contain w-12 h-12 min-h-12"
+                            />
+                          ) : (
+                            <span className="text-4xl leading-none text-sky-200/60">?</span>
+                          )}
+                        </div>
+                        <span className="mt-1.5 text-[11px] font-space text-sky-200/80 text-center leading-tight">
+                          {skill.name}
                         </span>
-                      </span>
+                      </div>
                     ))}
+                    {/* 泡スキル — 同じ行に泡カードとして配置 */}
+                    {bubbles.length > 0 && (
+                      <div
+                        className="skill-tag relative flex items-center gap-4 self-center rounded-2xl border border-sky-300/25 bg-gradient-to-br from-sky-400/10 via-sky-300/5 to-cyan-400/10 px-5 py-3 backdrop-blur-sm transition-transform hover:scale-105"
+                        style={{
+                          boxShadow:
+                            '0 0 24px rgba(56,189,248,0.15), inset 0 0 16px rgba(125,211,252,0.08)',
+                        }}
+                      >
+                        {/* 装飾バブル */}
+                        <div className="pointer-events-none absolute -top-1.5 -right-1.5 h-3 w-3 rounded-full bg-sky-300/40 blur-[1px]" aria-hidden="true" />
+                        <div className="pointer-events-none absolute -bottom-1 -left-1 h-2 w-2 rounded-full bg-cyan-300/40 blur-[1px]" aria-hidden="true" />
+                        {bubbles.map((skill) => (
+                          <div key={skill.name} className="flex flex-col items-center">
+                            <div className="flex h-10 w-10 items-center justify-center">
+                              {skill.icon && (
+                                <img
+                                  src={skill.icon}
+                                  alt={skill.name}
+                                  width={32}
+                                  height={32}
+                                  className="object-contain w-8 h-8"
+                                />
+                              )}
+                            </div>
+                            <span className="mt-1 text-[10px] font-space text-sky-300/60 text-center leading-tight">
+                              {skill.name}
+                            </span>
+                          </div>
+                        ))}
+                        <span className="text-[9px] font-space text-sky-300/35 writing-vertical-rl">
+                          {bubbles[0].proficiency}
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
 
