@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import TextReveal from '@/components/ui/TextReveal'
 import { profile } from '@/data/profile'
+import { socialIcons, type SocialIconKey } from '@/components/icons/social'
 
 export default function Contact() {
   const [copied, setCopied] = useState(false)
@@ -22,7 +23,7 @@ export default function Contact() {
       <div className="max-w-4xl mx-auto text-center">
         <TextReveal
           tag="h2"
-          className="text-4xl md:text-6xl lg:text-7xl font-syne font-extrabold mb-8"
+          className="text-[clamp(2rem,9vw,5rem)] font-syne font-extrabold mb-8 leading-tight"
           scrub={false}
           stagger={0.03}
           underwater
@@ -36,7 +37,7 @@ export default function Contact() {
           scrub
           underwater
         >
-          お気軽にご連絡ください。新しいプロジェクトやコラボレーションのお話をお待ちしています。
+          お気軽にご連絡ください。
         </TextReveal>
 
         {/* Email */}
@@ -51,19 +52,30 @@ export default function Contact() {
         </div>
 
         {/* Social links */}
-        <div className="flex items-center justify-center gap-8">
-          {profile.social.map((link) => (
-            <a
-              key={link.label}
-              href={link.href}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-sm font-space uppercase tracking-wider text-sky-300/60 hover:text-sky-100 transition-colors"
-              data-cursor="magnetic"
-            >
-              {link.label}
-            </a>
-          ))}
+        <div className="flex items-center justify-center gap-6">
+          {profile.social.map((link) => {
+            const Icon = socialIcons[link.label as SocialIconKey]
+            return (
+              <a
+                key={link.label}
+                href={link.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={link.label}
+                title={link.label}
+                className="inline-flex items-center justify-center w-14 h-14 rounded-full text-sky-300/60 hover:text-sky-100 hover:bg-sky-300/10 transition-colors"
+                data-cursor="magnetic"
+              >
+                {Icon ? (
+                  <Icon className="w-7 h-7" />
+                ) : (
+                  <span className="text-sm font-space uppercase tracking-wider">
+                    {link.label}
+                  </span>
+                )}
+              </a>
+            )
+          })}
         </div>
 
         {/* Footer */}

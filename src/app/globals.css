@@ -67,7 +67,7 @@ body {
     0 0 14px rgba(200, 230, 255, 0.7),
     0 3px 10px rgba(3, 16, 38, 0.85);
 }
-.underwater-text > span {
+.underwater-text span {
   color: #ffffff !important;
 }
 

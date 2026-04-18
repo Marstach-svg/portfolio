@@ -8,6 +8,7 @@ import { profile } from '@/data/profile'
 import { skills } from '@/data/skills'
 import { experiences } from '@/data/experience'
 import { educations } from '@/data/education'
+import { certifications } from '@/data/certifications'
 
 gsap.registerPlugin(ScrollTrigger)
 
@@ -327,9 +328,23 @@ export default function About() {
                     <p className="text-xs font-space uppercase tracking-wider text-sky-300/50 mb-1">
                       {edu.period.start} — {edu.period.end}
                     </p>
-                    <h4 className="text-lg font-syne font-semibold text-sky-100">
-                      {edu.school}
-                    </h4>
+                    <div className="flex items-center gap-3 mb-1">
+                      {edu.logo && (
+                        <img
+                          src={edu.logo}
+                          alt={edu.schoolEn ?? edu.school}
+                          className="w-8 h-8 object-contain"
+                        />
+                      )}
+                      <h4 className="text-lg font-syne font-semibold text-sky-100">
+                        {edu.school}
+                        {edu.schoolEn && (
+                          <span className="ml-2 text-sm font-space font-normal text-sky-300/60">
+                            ({edu.schoolEn})
+                          </span>
+                        )}
+                      </h4>
+                    </div>
                     {edu.degree && (
                       <p className="text-sm text-sky-300/60 font-noto mb-2">
                         {edu.degree}
@@ -387,9 +402,23 @@ export default function About() {
                     <p className="text-[10px] font-space uppercase tracking-[0.25em] text-sky-300/70 mb-2">
                       Extracurricular
                     </p>
-                    <h4 className="text-lg font-syne font-semibold text-sky-100">
-                      {edu.school}
-                    </h4>
+                    <div className="flex items-center gap-3">
+                      {edu.logo && (
+                        <img
+                          src={edu.logo}
+                          alt={edu.schoolEn ?? edu.school}
+                          className="w-8 h-8 object-contain"
+                        />
+                      )}
+                      <h4 className="text-lg font-syne font-semibold text-sky-100">
+                        {edu.school}
+                        {edu.schoolEn && (
+                          <span className="ml-2 text-sm font-space font-normal text-sky-300/60">
+                            ({edu.schoolEn})
+                          </span>
+                        )}
+                      </h4>
+                    </div>
                     <p className="text-sm text-sky-300/60 font-noto mb-2">
                       {edu.degree}
                     </p>
@@ -415,6 +444,45 @@ export default function About() {
           )}
         </div>
 
+        {/* ===== Certifications ===== */}
+        {certifications.length > 0 && (
+          <div className="mb-24">
+            <h3 className="text-sm font-space uppercase tracking-[0.2em] text-sky-300/60 mb-8">
+              Certifications
+            </h3>
+            <div className="flex flex-wrap gap-4">
+              {certifications.map((cert) => (
+                <div
+                  key={cert.id}
+                  className="flex items-center gap-4 rounded-xl border border-sky-300/20 bg-sky-400/5 px-5 py-4 backdrop-blur-sm"
+                >
+                  {cert.logo && (
+                    <img
+                      src={cert.logo}
+                      alt={cert.nameEn ?? cert.name}
+                      className="w-10 h-10 object-contain"
+                    />
+                  )}
+                  <div>
+                    <h4 className="text-base font-syne font-semibold text-sky-100">
+                      {cert.name}
+                      {cert.nameEn && (
+                        <span className="ml-2 text-xs font-space font-normal text-sky-300/60">
+                          ({cert.nameEn})
+                        </span>
+                      )}
+                    </h4>
+                    <p className="text-xs font-space text-sky-300/50 mt-0.5">
+                      {cert.acquiredAt}
+                      {cert.issuer && <span className="ml-2">· {cert.issuer}</span>}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* ===== Work Experience ===== */}
         <div ref={experienceRef}>
           <h3 className="text-sm font-space uppercase tracking-[0.2em] text-sky-300/60 mb-8">
@@ -429,9 +497,23 @@ export default function About() {
                   <p className="text-xs font-space uppercase tracking-wider text-sky-300/50 mb-1">
                     {exp.period.start} — {exp.period.end}
                   </p>
-                  <h4 className="text-lg font-syne font-semibold text-sky-100">
-                    {exp.company}
-                  </h4>
+                  <div className="flex items-center gap-3 mb-1">
+                    {exp.logo && (
+                      <img
+                        src={exp.logo}
+                        alt={exp.companyEn ?? exp.company}
+                        className="w-8 h-8 object-contain"
+                      />
+                    )}
+                    <h4 className="text-lg font-syne font-semibold text-sky-100">
+                      {exp.company}
+                      {exp.companyEn && (
+                        <span className="ml-2 text-sm font-space font-normal text-sky-300/60">
+                          ({exp.companyEn})
+                        </span>
+                      )}
+                    </h4>
+                  </div>
                   <p className="text-sm text-sky-300/60 font-noto mb-2">
                     {exp.role}
                   </p>

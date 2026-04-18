@@ -11,8 +11,8 @@ export const profile: Profile = {
   photo: '/images/profile/icon_SANDBOX.png',
   social: [
     { label: 'GitHub', href: 'https://github.com/Marstach-svg' },
-    { label: 'X', href: 'https://x.com' },
-    { label: 'LinkedIn', href: 'https://linkedin.com' },
-    { label: 'Zenn', href: 'https://zenn.dev' },
+    // { label: 'X', href: 'https://x.com' },
+    // { label: 'LinkedIn', href: 'https://linkedin.com' },
+    { label: 'Qiita', href: 'https://qiita.com/Marstach' },
   ],
 }

@@ -48,13 +48,24 @@ export default function TextReveal({
     el.innerHTML = ''
 
     const chars: HTMLSpanElement[] = []
-    for (const char of text) {
-      const span = document.createElement('span')
-      span.textContent = char === ' ' ? '\u00A0' : char
-      span.style.display = 'inline-block'
-      span.style.color = palette.initial
-      el.appendChild(span)
-      chars.push(span)
+    const tokens = text.split(/(\s+)/)
+    for (const token of tokens) {
+      if (/^\s+$/.test(token)) {
+        el.appendChild(document.createTextNode(token))
+        continue
+      }
+      const wordWrap = document.createElement('span')
+      wordWrap.style.display = 'inline-block'
+      wordWrap.style.whiteSpace = 'nowrap'
+      for (const char of token) {
+        const span = document.createElement('span')
+        span.textContent = char
+        span.style.display = 'inline-block'
+        span.style.color = palette.initial
+        wordWrap.appendChild(span)
+        chars.push(span)
+      }
+      el.appendChild(wordWrap)
     }
 
     const triggers: ScrollTrigger[] = []

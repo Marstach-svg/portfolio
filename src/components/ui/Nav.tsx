@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, MouseEvent } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import gsap from 'gsap'
 
 const navItems = [
@@ -11,11 +11,27 @@ const navItems = [
   { label: 'Contact', href: '#contact' },
 ]
 
+// Keep in sync with COVER_MS in PageTransition / BackButton.
+const COVER_MS = 520
+
 export default function Nav() {
   const [isOpen, setIsOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const pathname = usePathname()
+  const router = useRouter()
   const isHome = pathname === '/'
+
+  // Used on detail pages: play the reverse cover (wave rising from below)
+  // then navigate home with the chosen hash — matches BackButton's feel.
+  const handleHomeLinkClick = (href: string) => (e: MouseEvent<HTMLAnchorElement>) => {
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
+    e.preventDefault()
+    setIsOpen(false)
+    window.dispatchEvent(new CustomEvent('pt-cover-reverse'))
+    window.setTimeout(() => {
+      router.push(href, { scroll: false })
+    }, COVER_MS - 40)
+  }
 
   useEffect(() => {
     setIsOpen(false)
@@ -61,13 +77,14 @@ export default function Nav() {
                   {item.label}
                 </a>
               ) : (
-                <Link
+                <a
                   href={`/${item.href}`}
+                  onClick={handleHomeLinkClick(`/${item.href}`)}
                   className="text-sm text-white/80 hover:text-white transition-colors font-space tracking-wide"
                   data-cursor="hover"
                 >
                   {item.label}
-                </Link>
+                </a>
               )}
             </li>
           ))}
@@ -110,13 +127,13 @@ export default function Nav() {
                     {item.label}
                   </a>
                 ) : (
-                  <Link
+                  <a
                     href={`/${item.href}`}
+                    onClick={handleHomeLinkClick(`/${item.href}`)}
                     className="text-2xl font-syne text-white/90"
-                    onClick={() => setIsOpen(false)}
                   >
                     {item.label}
-                  </Link>
+                  </a>
                 )}
               </li>
             ))}

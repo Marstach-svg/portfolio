@@ -25,6 +25,8 @@ export type Skill = {
 export type Experience = {
   id: string
   company: string
+  companyEn?: string
+  logo?: string
   role: string
   period: { start: string; end: string }
   summary: string
@@ -34,6 +36,8 @@ export type Experience = {
 export type Education = {
   id: string
   school: string
+  schoolEn?: string
+  logo?: string
   degree: string
   period: { start: string; end: string }
   summary: string
@@ -49,6 +53,15 @@ export type Profile = {
   email: string
   photo?: string
   social: { label: string; href: string }[]
+}
+
+export type Certification = {
+  id: string
+  name: string
+  nameEn?: string
+  issuer?: string
+  acquiredAt: string
+  logo?: string
 }
 
 export type NavItem = { label: string; href: string }

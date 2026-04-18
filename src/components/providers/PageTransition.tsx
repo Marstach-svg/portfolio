@@ -55,6 +55,7 @@ export default function PageTransition({ children }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const isFirstRender = useRef(true)
   const currentAnimRef = useRef<Animation | null>(null)
+  const coverPlayedRef = useRef(false)
   const directionRef = useRef<Direction>('forward')
   const [direction, setDirection] = useState<Direction>('forward')
 
@@ -101,11 +102,13 @@ export default function PageTransition({ children }: Props) {
       try { sessionStorage.setItem(SCROLL_KEY, String(window.scrollY)) } catch {}
       setDirection('forward')
       directionRef.current = 'forward'
+      coverPlayedRef.current = true
       playAnim(COVER_FRAMES, COVER_MS, 'ease-out')
     }
     const reverseHandler = () => {
       setDirection('reverse')
       directionRef.current = 'reverse'
+      coverPlayedRef.current = true
       playAnim(COVER_FRAMES, COVER_MS, 'ease-out')
     }
     window.addEventListener('pt-cover-forward', forwardHandler)
@@ -123,15 +126,23 @@ export default function PageTransition({ children }: Props) {
     if (isFirstRender.current) return
     const lenis = (window as unknown as { __lenis?: LenisLike }).__lenis
     if (directionRef.current === 'reverse') {
-      // Restore the scroll position that was saved when the user navigated
-      // forward. This is more reliable than recalculating from DOM positions
-      // which can be unstable during remount.
+      // Prefer the hash target (nav-link reverse: About / Projects / Contact)
+      // over the sessionStorage position (BackButton reverse).
       let top = 0
-      try {
-        const saved = sessionStorage.getItem(SCROLL_KEY)
-        if (saved) top = Number(saved)
-      } catch {}
-      // Fallback: calculate from the Projects section if no saved position.
+      const hash = window.location.hash
+      if (hash && hash.length > 1) {
+        const target = document.querySelector(hash)
+        if (target) {
+          top = (target as HTMLElement).getBoundingClientRect().top + window.scrollY
+        }
+      }
+      if (!top) {
+        try {
+          const saved = sessionStorage.getItem(SCROLL_KEY)
+          if (saved) top = Number(saved)
+        } catch {}
+      }
+      // Fallback: calculate from the Projects section if nothing else.
       if (!top) {
         const el = document.getElementById('projects')
         if (el) top = el.getBoundingClientRect().top + window.scrollY
@@ -141,11 +152,19 @@ export default function PageTransition({ children }: Props) {
       if (lenis) lenis.scrollTo(top, { immediate: true, force: true })
       return
     }
-    if (lenis) {
-      lenis.scrollTo(0, { immediate: true, force: true })
-    } else {
-      window.scrollTo(0, 0)
+    // Respect hash navigation (e.g., nav link to /#about from a detail page).
+    let top = 0
+    const hash = window.location.hash
+    if (hash && hash.length > 1) {
+      const target = document.querySelector(hash)
+      if (target) {
+        top = (target as HTMLElement).getBoundingClientRect().top + window.scrollY
+      }
     }
+    // Apply via window first (synchronous) so child gsap ScrollTriggers
+    // registered in their own useEffects compute against the correct scroll.
+    window.scrollTo(0, top)
+    if (lenis) lenis.scrollTo(top, { immediate: true, force: true })
   }, [pathname])
 
   // --- pathname change: play the reveal ------------------------------
@@ -157,58 +176,93 @@ export default function PageTransition({ children }: Props) {
       return
     }
 
+    // Child useEffects (Hero/About/Projects/TextReveal) just registered
+    // their gsap.from entrance tweens which leave targets at opacity:0 /
+    // translated until a ScrollTrigger fires. On any cross-page nav (cover
+    // or plain nav link) we want the destination to render fully visible
+    // immediately — kill those entrance tweens and force natural state.
+    const transformSelectors = [
+      '.hero-char',
+      '.skill-tag',
+      '.timeline-item',
+      '.timeline-line',
+      '.timeline-dot',
+      '.photo-frame',
+      '.photo-halo',
+      '.project-card-wrap',
+      '.underwater-text span',
+    ]
+    const nodes = document.querySelectorAll(transformSelectors.join(','))
+    nodes.forEach((el) => {
+      gsap.killTweensOf(el)
+      gsap.set(el, {
+        opacity: 1,
+        x: 0,
+        y: 0,
+        rotation: 0,
+        rotationX: 0,
+        rotationY: 0,
+        scale: 1,
+        scaleY: 1,
+      })
+    })
+    document
+      .querySelectorAll('.underwater-text span')
+      .forEach((el) => {
+        ;(el as HTMLElement).style.color = '#ffffff'
+      })
+
+    // Re-assert hash-based scroll a few times to beat late reflows (images,
+    // fonts, Lenis internal sync) that could shift the target's position
+    // after our initial useLayoutEffect scroll.
+    const reassertHashScroll = () => {
+      const hash = window.location.hash
+      if (!hash || hash.length <= 1) return
+      const target = document.querySelector(hash)
+      if (!target) return
+      const top = (target as HTMLElement).getBoundingClientRect().top + window.scrollY
+      const lenis = (window as unknown as { __lenis?: LenisLike }).__lenis
+      window.scrollTo(0, top)
+      if (lenis) lenis.scrollTo(top, { immediate: true, force: true })
+    }
+
+    // Nav-link navigations (without a cover event) should not flash the
+    // overlay. Only play the reveal if a cover was played first.
+    if (!coverPlayedRef.current) {
+      requestAnimationFrame(() => {
+        ScrollTrigger.refresh()
+        reassertHashScroll()
+      })
+      window.setTimeout(reassertHashScroll, 80)
+      window.setTimeout(reassertHashScroll, 250)
+      return
+    }
+    coverPlayedRef.current = false
+
     const dir = directionRef.current
 
     if (dir === 'reverse') {
       const lenis = (window as unknown as { __lenis?: LenisLike }).__lenis
 
-      // Child useEffects (Hero/About/Projects/TextReveal) ran just before
-      // this parent useEffect and registered their entrance tweens. Kill
-      // them and force every entrance target to its natural visible state.
-      const transformSelectors = [
-        '.hero-char',
-        '.skill-tag',
-        '.timeline-item',
-        '.timeline-line',
-        '.timeline-dot',
-        '.photo-frame',
-        '.photo-halo',
-        '.project-card-wrap',
-        '.underwater-text > span',
-      ]
-      const nodes = document.querySelectorAll(transformSelectors.join(','))
-      nodes.forEach((el) => {
-        gsap.killTweensOf(el)
-        gsap.set(el, {
-          opacity: 1,
-          x: 0,
-          y: 0,
-          rotation: 0,
-          rotationX: 0,
-          rotationY: 0,
-          scale: 1,
-          scaleY: 1,
-        })
-      })
-      // Force TextReveal character spans to their final color.
-      document
-        .querySelectorAll('.underwater-text > span')
-        .forEach((el) => {
-          ;(el as HTMLElement).style.color = '#ffffff'
-        })
-
       ScrollTrigger.refresh()
 
-      // Re-assert the scroll position from the saved value.
-      // Retry a few times because Lenis may drift after restart.
+      // Re-assert the scroll position. Prefer hash target (nav-link reverse)
+      // over the saved value (BackButton reverse).
       let savedTop = 0
       try {
         const saved = sessionStorage.getItem(SCROLL_KEY)
         if (saved) savedTop = Number(saved)
       } catch {}
+      const hashForReverse = window.location.hash
       const scrollToSaved = () => {
-        // Use saved position; fallback to #projects DOM position.
-        let top = savedTop
+        let top = 0
+        if (hashForReverse && hashForReverse.length > 1) {
+          const target = document.querySelector(hashForReverse)
+          if (target) {
+            top = (target as HTMLElement).getBoundingClientRect().top + window.scrollY
+          }
+        }
+        if (!top) top = savedTop
         if (!top) {
           const el = document.getElementById('projects')
           if (el) top = el.getBoundingClientRect().top + window.scrollY

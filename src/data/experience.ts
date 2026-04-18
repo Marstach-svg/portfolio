@@ -4,6 +4,8 @@ export const experiences: Experience[] = [
   {
     id: 'exp-2',
     company: '株式会社KIYONO',
+    companyEn: 'KIYONO Inc.',
+    logo: '/images/logos/kiyono.png',
     role: 'ソフトウェアエンジニア (エンジニアユニット開発部門)',
     period: { start: '2025年5月', end: '現在' },
     summary:
@@ -13,6 +15,8 @@ export const experiences: Experience[] = [
   {
     id: 'exp-1',
     company: 'TOWN株式会社',
+    companyEn: 'TOWN Inc.',
+    logo: '/images/logos/town.png',
     role: 'ソフトウェアエンジニア (SaaS事業部)',
     period: { start: '2024年10月', end: '2025年6月' },
     summary:

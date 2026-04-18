@@ -5,6 +5,7 @@ import { projects } from '@/data/projects'
 import ReloadOnPop from '@/components/ui/ReloadOnPop'
 import BeachDecorations from '@/components/ui/BeachDecorations'
 import BackButton from '@/components/ui/BackButton'
+import { GitHubIcon } from '@/components/icons/social'
 
 type Props = { params: Promise<{ slug: string }> }
 
@@ -85,10 +86,12 @@ export default async function ProjectDetailPage({ params }: Props) {
                 href={project.links.github}
                 target="_blank"
                 rel="noopener noreferrer"
+                aria-label="GitHub"
                 className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-xs font-space text-muted hover:border-text hover:text-text transition-colors"
                 data-cursor="hover"
               >
-                GitHub &rarr;
+                <GitHubIcon className="w-5 h-5" />
+                GitHub
               </a>
             )}
             {project.links.demo && (
