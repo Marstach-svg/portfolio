@@ -24,6 +24,7 @@ import {
   Scene,
   ShaderMaterial,
   SphereGeometry,
+  Texture,
   Vector3,
   WebGLRenderer,
 } from 'three'
@@ -272,20 +273,57 @@ export default function RyokenSubmarine() {
 
     const addPorthole = (x: number, z: number) => {
       const facing = z >= 0 ? 1 : -1
-      const ring = new Mesh(new CircleGeometry(0.22, 24), portholeRingMat)
+      const ring = new Mesh(new CircleGeometry(0.42, 32), portholeRingMat)
       ring.position.set(x, 0, z + 0.02 * facing)
       ring.rotation.y = facing > 0 ? 0 : Math.PI
       subGroup.add(ring)
 
-      const glass = new Mesh(new CircleGeometry(0.16, 24), portholeGlassMat)
+      const glass = new Mesh(new CircleGeometry(0.34, 32), portholeGlassMat)
       glass.position.set(x, 0, z + 0.03 * facing)
       glass.rotation.y = facing > 0 ? 0 : Math.PI
       subGroup.add(glass)
     }
-    addPorthole(-0.35, 1.0)
-    addPorthole(0.4, 1.0)
-    addPorthole(-0.35, -1.0)
-    addPorthole(0.4, -1.0)
+    addPorthole(-0.5, 1.0)
+    addPorthole(0.5, 1.0)
+    addPorthole(-0.5, -1.0)
+    addPorthole(0.5, -1.0)
+
+    // CREW MEMBER (tomokore.png) — visible through the front porthole on
+    // each side of the sub. Two planes (one per side) ensure the crew is
+    // always on the camera-facing side regardless of Y-axis flip.
+    const crewTexture = new Texture()
+    const crewImg = new Image()
+    crewImg.crossOrigin = 'anonymous'
+    crewImg.onload = () => {
+      crewTexture.image = crewImg
+      crewTexture.needsUpdate = true
+    }
+    crewImg.src = '/images/tomokore.png'
+
+    const crewMat = addMat(
+      new MeshBasicMaterial({
+        map: crewTexture,
+        transparent: true,
+        depthWrite: false,
+      })
+    )
+    const addCrew = (x: number, z: number) => {
+      const facing = z >= 0 ? 1 : -1
+      const crew = new Mesh(new CircleGeometry(0.3, 32), crewMat)
+      crew.position.set(x, 0, z + 0.05 * facing)
+      crew.rotation.y = facing > 0 ? 0 : Math.PI
+      subGroup.add(crew)
+    }
+    addCrew(0.5, 1.0)
+    addCrew(0.5, -1.0)
+
+    // Crew peek timing — appears briefly at random intervals so the viewer
+    // catches a glimpse and wonders "was someone there?". Hidden by default.
+    let crewPeekStart = -Infinity
+    const crewPeekDuration = 1.5
+    const scheduleNextPeek = (now: number) =>
+      now + crewPeekDuration + 6 + Math.random() * 9
+    let crewNextPeek = scheduleNextPeek(performance.now() * 0.001)
 
     // FRONT COCKPIT WINDOW (teal sphere on the right = front)
     const cockpitMat = addMat(
@@ -757,6 +795,24 @@ export default function RyokenSubmarine() {
       // Visibility + material opacity (all materials share this opacity)
       subGroup.visible = effectiveOpacity > 0.005
       for (const m of subMaterials) m.opacity = effectiveOpacity
+      // Porthole glass is overridden lower so the crew face shows through.
+      portholeGlassMat.opacity = effectiveOpacity * 0.5
+
+      // Crew peek envelope — bell-shaped fade in/out at random intervals.
+      const nowSec = performance.now() * 0.001
+      if (
+        nowSec > crewNextPeek &&
+        nowSec > crewPeekStart + crewPeekDuration
+      ) {
+        crewPeekStart = nowSec
+        crewNextPeek = scheduleNextPeek(nowSec)
+      }
+      const peekElapsed = nowSec - crewPeekStart
+      const peekFactor =
+        peekElapsed >= 0 && peekElapsed <= crewPeekDuration
+          ? Math.sin((peekElapsed / crewPeekDuration) * Math.PI)
+          : 0
+      crewMat.opacity = effectiveOpacity * peekFactor
 
       // Spin propeller continuously when visible
       propellerGroup.rotation.x += effectiveOpacity * 0.35
